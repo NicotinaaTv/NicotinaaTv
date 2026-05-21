@@ -497,8 +497,14 @@ async function loadRemoteSession() {
     .from("profiles")
     .select("id,nickname,nickname_key,role,nickname_changed_at")
     .eq("id", session.user.id)
-    .single();
+    .maybeSingle();
   if (profileError) throw profileError;
+  if (!profile) {
+    remoteUser = null;
+    state.sessionNickname = "";
+    setStatus("Account creato, ma profilo non pronto: contatta il CEO.", "error");
+    return;
+  }
 
   remoteUser = {
     id: profile.id,
@@ -540,9 +546,14 @@ async function loadRemoteStats() {
     .from("site_stats")
     .select("total_visits,daily_visits,total_downloads,last_daily_date")
     .eq("id", "global")
-    .single();
+    .maybeSingle();
   if (error) throw error;
-  mapRemoteStats(data);
+  mapRemoteStats(data || {
+    total_visits: 0,
+    daily_visits: 0,
+    total_downloads: 0,
+    last_daily_date: "",
+  });
 }
 
 async function loadRemoteComments() {
@@ -564,6 +575,35 @@ async function registerRemoteDownload() {
   if (error) throw error;
   mapRemoteStats(data);
   render();
+}
+
+function filenameFromDisposition(disposition) {
+  const match = String(disposition || "").match(/filename\*?=(?:UTF-8''|")?([^";]+)/i);
+  return match ? decodeURIComponent(match[1].replaceAll('"', "").trim()) : "NicotinaaTv Extractor V1.0.zip";
+}
+
+async function downloadProtectedFile() {
+  const base = ceoApiBase();
+  if (!base) throw new Error("Download protetto non configurato.");
+  const { data } = await supabaseClient.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) throw new Error("Sessione scaduta: rifai il login.");
+  const response = await fetch(`${base}/download`, {
+    headers: { authorization: `Bearer ${token}` },
+  });
+  if (!response.ok) {
+    const errorBody = await response.json().catch(() => ({}));
+    throw new Error(errorBody.error || "Download non autorizzato.");
+  }
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filenameFromDisposition(response.headers.get("content-disposition"));
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 async function ceoFetch(path, options = {}) {
@@ -945,9 +985,12 @@ els.downloadLink.addEventListener("click", async (event) => {
   }
   if (isRemoteMode()) {
     try {
-      await registerRemoteDownload();
-    } finally {
-      window.location.href = downloadUrl;
+      await downloadProtectedFile();
+      await loadRemoteStats();
+      render();
+      setStatus("Download avviato.", "success");
+    } catch (error) {
+      setStatus(error.message || "Download non riuscito.", "error");
     }
     return;
   }
