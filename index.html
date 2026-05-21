@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="it">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>NicotinaaTv Extractor V1.0 - Download Ufficiale</title>
+    <meta
+      name="description"
+      content="Download ufficiale di NicotinaaTv Extractor V1.0 per estrarre veicoli RPF FiveM e generare resource con stream, data e fxmanifest."
+    />
+    <link rel="icon" type="image/png" href="assets/logo.png" />
+    <link rel="apple-touch-icon" href="assets/logo.png" />
+    <link rel="stylesheet" href="styles.css" />
+    <script src="client.js" defer></script>
+  </head>
+  <body>
+    <canvas id="fx" aria-hidden="true"></canvas>
+    <div class="neon-word" aria-hidden="true">
+      <span>N</span><span>i</span><span>c</span><span>o</span><span>t</span><span>i</span><span>n</span><span>a</span><span>a</span><span>T</span><span>v</span>
+    </div>
+
+    <header class="topbar">
+      <a class="brand" href="#home" aria-label="NicotinaaTv home">
+        <img src="assets/logo.png" alt="NicotinaaTv" draggable="false" />
+        <span>NicotinaaTv</span>
+      </a>
+      <button class="menu-toggle" type="button" aria-label="Apri menu" aria-expanded="false" data-menu-toggle>
+        <span></span>
+        <span></span>
+        <span></span>
+      </button>
+      <div class="top-actions">
+        <nav aria-label="Navigazione principale">
+          <a href="#download">Download</a>
+          <a href="#funzioni">Funzioni</a>
+          <a href="#assistenza">Discord</a>
+          <a href="#commenti">Commenti</a>
+          <a href="#social">Social</a>
+        </nav>
+        <a class="profile-chip" href="#commenti" hidden data-profile-chip aria-label="Account">
+          <img src="assets/default-avatar.svg" alt="" />
+          <span data-profile-name></span>
+        </a>
+      </div>
+    </header>
+
+    <main id="home">
+      <section class="hero section-shell">
+        <div class="hero-copy reveal">
+          <p class="eyebrow">Download ufficiale</p>
+          <h1>NicotinaaTv Extractor V1.0</h1>
+          <p class="lead">
+            Vuoi estrarre veicoli RPF per FiveM in modo piu veloce e ordinato?
+            Trascini uno o piu DLC.RPF dentro l'app, scegli la cartella di output
+            e il programma prepara automaticamente la resource FiveM con stream,
+            data e fxmanifest.
+          </p>
+          <div class="hero-actions" id="download">
+            <a
+              class="download-button"
+              href="download/NicotinaaTv%20Extractor%20V1.0.zip"
+              download="NicotinaaTv Extractor V1.0.zip"
+              data-download-link
+            >
+              <span>Scarica ZIP ufficiale</span>
+              <small>NicotinaaTv Extractor V1.0.zip</small>
+            </a>
+            <a class="outline-button" href="#sicurezza">Controlla hash</a>
+          </div>
+          <div class="download-meter" aria-live="polite">
+            <span>Download da questo browser</span>
+            <strong data-downloads>0</strong>
+          </div>
+        </div>
+
+        <div class="logo-stage reveal" aria-label="Logo NicotinaaTv">
+          <span class="ring ring-one"></span>
+          <span class="ring ring-two"></span>
+          <img src="assets/logo.png" alt="Logo NicotinaaTv" draggable="false" />
+        </div>
+      </section>
+
+      <section class="video-showcase section-shell reveal" id="anteprima">
+        <div class="section-heading compact-heading">
+          <p class="eyebrow">Anteprima</p>
+          <h2>Guarda NicotinaaTv Extractor in azione.</h2>
+        </div>
+        <div class="video-frame" data-preview-player>
+          <div class="preview-screen">
+            <canvas width="480" height="270" aria-label="Anteprima video NicotinaaTv Extractor" role="img" data-preview-frame></canvas>
+          </div>
+          <div class="player-controls" aria-label="Controlli anteprima">
+            <button type="button" data-preview-toggle>Play</button>
+            <button type="button" data-preview-restart>Indietro</button>
+            <input type="range" min="0" max="40.7" step="0.125" value="0" data-preview-seek aria-label="Tempo video" />
+            <span data-preview-time>0:00 / 0:40</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="security-band section-shell reveal" id="sicurezza">
+        <div>
+          <p class="eyebrow">Sicurezza</p>
+          <h2>Scarica solo da questa pagina ufficiale.</h2>
+          <p>
+            Non fidarti di copie caricate su altri siti, Discord o Telegram. Se
+            l'hash del file scaricato non combacia, elimina il file: potrebbe
+            essere stato modificato.
+          </p>
+          <p>
+            L'app include un controllo anti-manomissione: se l'eseguibile viene
+            alterato, l'avvio mostra un avviso di sicurezza.
+          </p>
+        </div>
+        <div class="hash-list">
+          <div>
+            <span>SHA256 ZIP ufficiale</span>
+            <code>99CC3CA1D145BB1E04090D27C220D94101D44350B9810F71EAF6CADA07D7C76F</code>
+          </div>
+          <div>
+            <span>SHA256 EXE nella ZIP</span>
+            <code>E1B9089567CA4AFA28A1A4B49FD780BAE78CD1DC18A5EE3B7D393AE9ED95F9FC</code>
+          </div>
+        </div>
+      </section>
+
+      <section class="feature-wrap section-shell" id="funzioni">
+        <div class="section-heading reveal">
+          <p class="eyebrow">Funzioni principali</p>
+          <h2>Resource FiveM pronta, pulita e ordinata.</h2>
+        </div>
+        <div class="feature-grid">
+          <article class="feature reveal">Estrazione DLC.RPF per veicoli FiveM.</article>
+          <article class="feature reveal">Drag and drop di uno o piu file RPF.</article>
+          <article class="feature reveal">Conversione in coda di piu auto.</article>
+          <article class="feature reveal">Creazione automatica cartelle stream e data.</article>
+          <article class="feature reveal">Generazione automatica fxmanifest.lua firmato NicotinaaTv Extractor V1.0.</article>
+          <article class="feature reveal">Supporto veicoli add-on.</article>
+          <article class="feature reveal">Supporto veicoli replace con solo stream.</article>
+          <article class="feature reveal">Pulizia data: solo file .meta.</article>
+          <article class="feature reveal">Pulizia stream: solo file .yft e .ytd.</article>
+          <article class="feature reveal">Fix tuning carcols per modelli mancanti.</article>
+          <article class="feature reveal">Fix Luxart/emergency per polizia, sheriff, swat, ems e simili.</article>
+          <article class="feature reveal">Fix vehicles_*_interior quando il nome nel vehicles.meta non combacia con lo .ytd reale.</article>
+        </div>
+      </section>
+
+      <section class="discord-support section-shell reveal" id="assistenza">
+        <div>
+          <p class="eyebrow">Assistenza ufficiale</p>
+          <h2>Hai bisogno di aiuto?</h2>
+          <p>
+            Entra nel Discord ufficiale per supporto, aggiornamenti, problemi con
+            il download e richieste su NicotinaaTv Extractor.
+          </p>
+        </div>
+        <a class="discord-button" href="https://discord.gg/cBfpqR6vkj" target="_blank" rel="noopener noreferrer">
+          Vai al Discord
+        </a>
+      </section>
+
+      <section class="account-shell section-shell" id="commenti">
+        <div class="section-heading reveal">
+          <p class="eyebrow">Community</p>
+          <h2>Commenti e aggiornamenti.</h2>
+          <p>
+            Questa versione HTML funziona senza server ed e' pronta per GitHub
+            Pages. I commenti vengono salvati nel browser in cui li scrivi.
+          </p>
+        </div>
+
+        <div class="auth-layout">
+          <form class="auth-panel reveal" data-auth-form="register">
+            <h3>Registrati</h3>
+            <label>
+              Nickname
+              <input name="nickname" autocomplete="username" maxlength="24" required />
+            </label>
+            <label>
+              Password
+              <input name="password" type="password" autocomplete="new-password" minlength="8" required />
+            </label>
+            <button type="submit">Crea account locale</button>
+          </form>
+
+          <form class="auth-panel reveal" data-auth-form="login">
+            <h3>Accedi</h3>
+            <label>
+              Nickname
+              <input name="nickname" autocomplete="username" required />
+            </label>
+            <label>
+              Password
+              <input name="password" type="password" autocomplete="current-password" required />
+            </label>
+            <button type="submit">Login</button>
+          </form>
+        </div>
+
+        <div class="session-bar" hidden data-session-bar>
+          <span data-session-text></span>
+          <form class="nickname-form" data-nickname-form>
+            <input name="nickname" maxlength="24" placeholder="Nuovo nickname" aria-label="Nuovo nickname" />
+            <button type="submit">Cambia nickname</button>
+          </form>
+        </div>
+
+        <form class="comment-form reveal" data-comment-form hidden>
+          <label>
+            Scrivi un commento
+            <textarea name="body" maxlength="600" required></textarea>
+          </label>
+          <button type="submit">Invia commento</button>
+        </form>
+
+        <p class="status-line" data-status role="status" aria-live="polite"></p>
+
+        <div class="moderation-panel reveal" data-boss-panel hidden>
+          <div class="section-heading compact-heading">
+            <p class="eyebrow">CEO Panel</p>
+            <h2>Commenti in attesa</h2>
+          </div>
+          <div class="comment-list" data-pending-comments></div>
+        </div>
+
+        <div class="public-comments reveal">
+          <div class="section-heading compact-heading">
+            <p class="eyebrow">Pubblici</p>
+            <h2>Commenti approvati</h2>
+          </div>
+          <div class="comment-list" data-public-comments></div>
+        </div>
+      </section>
+
+      <section class="social-strip section-shell reveal" id="social">
+        <a href="https://www.tiktok.com/@nicotinaa_tv" target="_blank" rel="noopener noreferrer">TikTok</a>
+        <a href="https://discord.gg/cBfpqR6vkj" target="_blank" rel="noopener noreferrer">Discord</a>
+        <a href="https://www.instagram.com/nicotinaatv/" target="_blank" rel="noopener noreferrer">Instagram</a>
+        <a href="https://www.youtube.com/@Nicotinaatv" target="_blank" rel="noopener noreferrer">YouTube</a>
+      </section>
+    </main>
+
+    <aside class="visit-counter" aria-live="polite">
+      <span class="eye-shape" aria-hidden="true"></span>
+      <span>Totali <strong data-total-visits>0</strong></span>
+      <span>Oggi <strong data-daily-visits>0</strong></span>
+    </aside>
+
+    <footer class="section-shell">
+      <span>NicotinaaTv Extractor V1.0</span>
+      <span>Official download page</span>
+    </footer>
+  </body>
+</html>

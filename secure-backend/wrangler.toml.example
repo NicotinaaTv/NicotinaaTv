@@ -1,0 +1,13 @@
+name = "nicotinaatv-ceo-api"
+main = "cloudflare-worker.js"
+compatibility_date = "2026-05-21"
+
+[vars]
+ALLOWED_CEO_IP = "2.38.77.137"
+ALLOWED_ORIGIN = "https://TUO-USERNAME.github.io"
+
+# Da configurare come secrets, NON qui:
+# wrangler secret put SUPABASE_URL
+# wrangler secret put SUPABASE_SERVICE_ROLE_KEY
+# wrangler secret put CEO_TOKEN_SECRET
+# wrangler secret put CEO_PASSWORD
