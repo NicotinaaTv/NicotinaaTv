@@ -75,6 +75,8 @@ const els = {
   loginForm: document.querySelector('[data-auth-form="login"]'),
   nicknameForm: document.querySelector("[data-nickname-form]"),
   downloadLink: document.querySelector("[data-download-link]"),
+  downloadHint: document.querySelector("[data-download-hint]"),
+  downloadStatus: document.querySelector("[data-download-status]"),
   profileChip: document.querySelector("[data-profile-chip]"),
   profileName: document.querySelector("[data-profile-name]"),
   previewFrame: document.querySelector("[data-preview-frame]"),
@@ -269,6 +271,12 @@ function setStatus(message, type = "") {
   els.status.className = `status-line ${type}`.trim();
 }
 
+function setDownloadStatus(message, type = "") {
+  if (!els.downloadStatus) return;
+  els.downloadStatus.textContent = message;
+  els.downloadStatus.className = `download-status status-line ${type}`.trim();
+}
+
 function escapeHtml(value) {
   return String(value)
     .replaceAll("&", "&amp;")
@@ -370,6 +378,13 @@ function render() {
   if (els.ceoTools) els.ceoTools.hidden = !ceoUnlocked;
   els.profileChip.hidden = !user;
   els.profileName.textContent = user?.nickname || "";
+  if (els.downloadHint) {
+    els.downloadHint.textContent = !user
+      ? "Login richiesto"
+      : isRemoteMode() && !user.emailConfirmed
+        ? "Conferma email richiesta"
+        : "Download privato pronto";
+  }
   els.registerForm.hidden = Boolean(lockedUser || user);
   els.loginForm.hidden = Boolean(user);
   els.nicknameForm.hidden = !user || user.role === "boss";
@@ -492,6 +507,8 @@ async function loadRemoteSession() {
     state.sessionNickname = "";
     return;
   }
+  const { data: currentAuthData } = await supabaseClient.auth.getUser();
+  const authUser = currentAuthData?.user || session.user;
 
   const { data: profile, error: profileError } = await supabaseClient
     .from("profiles")
@@ -508,8 +525,8 @@ async function loadRemoteSession() {
 
   remoteUser = {
     id: profile.id,
-    email: session.user.email,
-    emailConfirmed: Boolean(session.user.email_confirmed_at || session.user.confirmed_at),
+    email: authUser.email,
+    emailConfirmed: Boolean(authUser.email_confirmed_at || authUser.confirmed_at),
     nickname: profile.nickname,
     nicknameKey: profile.nickname_key,
     role: profile.role === "ceo" ? "boss" : "member",
@@ -974,22 +991,26 @@ document.addEventListener("submit", async (event) => {
 els.downloadLink.addEventListener("click", async (event) => {
   event.preventDefault();
   const user = currentUser();
-  const downloadUrl = els.downloadLink.dataset.downloadUrl || els.downloadLink.href;
   if (!user) {
     window.location.hash = "commenti";
+    setDownloadStatus("Per scaricare devi registrarti, confermare l'email e fare login.", "error");
     return setStatus("Per scaricare devi registrarti, confermare l'email e fare login.", "error");
   }
   if (isRemoteMode() && !user.emailConfirmed) {
     window.location.hash = "commenti";
+    setDownloadStatus("Prima conferma la tua email, poi potrai scaricare il file ufficiale.", "error");
     return setStatus("Prima conferma la tua email, poi potrai scaricare il file ufficiale.", "error");
   }
   if (isRemoteMode()) {
     try {
+      setDownloadStatus("Preparo il download privato...", "");
       await downloadProtectedFile();
       await loadRemoteStats();
       render();
+      setDownloadStatus("Download avviato.", "success");
       setStatus("Download avviato.", "success");
     } catch (error) {
+      setDownloadStatus(error.message || "Download non riuscito.", "error");
       setStatus(error.message || "Download non riuscito.", "error");
     }
     return;
@@ -997,7 +1018,7 @@ els.downloadLink.addEventListener("click", async (event) => {
   state.stats.downloads += 1;
   saveState();
   render();
-  window.location.href = downloadUrl;
+  setDownloadStatus("Download locale non disponibile online.", "error");
 });
 
 const preview = {
