@@ -673,6 +673,10 @@ form {
   color: var(--pink-hot);
 }
 
+.status-line:empty {
+  display: none;
+}
+
 .status-line.success {
   color: var(--success);
 }

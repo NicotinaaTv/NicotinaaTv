@@ -3,6 +3,7 @@ const BOSS_NICKNAME = "NicotinaaTv";
 const LOCAL_CEO_ENABLED = false;
 const NICKNAME_CHANGE_DAYS = 14;
 const REMOTE_VISITOR_KEY = "nicotinaatv_remote_visitor_key";
+const PUBLIC_SITE_URL = "https://nicotinaatv.github.io/NicotinaaTv/";
 const SUPABASE_SETTINGS = window.NICOTINAATV_SUPABASE || {};
 const supabaseClient =
   window.supabase &&
@@ -392,6 +393,10 @@ function getRemoteVisitorKey() {
   return key;
 }
 
+function authRedirectUrl() {
+  return PUBLIC_SITE_URL;
+}
+
 async function loadRemoteSession() {
   const { data, error } = await supabaseClient.auth.getSession();
   if (error) throw error;
@@ -475,12 +480,15 @@ async function handleRemoteAuth(form, mode) {
     const { data, error } = await supabaseClient.auth.signUp({
       email,
       password,
-      options: { data: { nickname } },
+      options: {
+        data: { nickname },
+        emailRedirectTo: authRedirectUrl(),
+      },
     });
     if (error) return setStatus(error.message || "Registrazione non riuscita.", "error");
     form.reset();
     if (!data.session) {
-      return setStatus("Account creato. Controlla la tua email se Supabase richiede conferma.", "success");
+      return setStatus("Account creato. Controlla la tua email per confermare la registrazione.", "success");
     }
   } else {
     setStatus("Accesso in corso...", "");
@@ -547,9 +555,9 @@ async function initializeRemote() {
       await loadRemoteSession();
       await refreshRemoteData();
     });
-    setStatus("Supabase collegato: account, commenti e contatori sono online.", "success");
+    setStatus("", "");
   } catch (error) {
-    setStatus(`Supabase non collegato: ${error.message || "controlla la chiave pubblica."}`, "error");
+    setStatus(`Accesso online non disponibile: ${error.message || "controlla la configurazione."}`, "error");
     render();
   }
 }
@@ -686,7 +694,7 @@ els.commentForm.addEventListener("submit", async (event) => {
   });
   saveState();
   els.commentForm.reset();
-  setStatus(user.role === "boss" ? "Commento pubblicato." : "Commento inviato: NicotinaaTv puo approvarlo.", "success");
+  setStatus(user.role === "boss" ? "Commento pubblicato." : "Commento inviato: il CEO puo approvarlo.", "success");
   render();
 });
 
@@ -696,7 +704,7 @@ document.addEventListener("click", (event) => {
   const deleteId = event.target?.dataset?.delete;
   if (!approveId && !rejectId && !deleteId) return;
   const user = currentUser();
-  if (user?.role !== "boss") return setStatus("Solo NicotinaaTv puo fare questa azione.", "error");
+  if (user?.role !== "boss") return setStatus("Solo il CEO puo fare questa azione.", "error");
   if (isRemoteMode()) return setStatus("La moderazione CEO online si attiva nel prossimo passo con Cloudflare Worker.", "error");
   const comment = state.comments.find((item) => item.id === (approveId || rejectId || deleteId));
   if (!comment) return setStatus("Commento non trovato.", "error");
