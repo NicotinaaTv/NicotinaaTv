@@ -340,6 +340,9 @@ function renderCeoUsers(users = []) {
           <dt>Ruolo</dt><dd>${escapeHtml(item.role || "member")}</dd>
           <dt>Email confermata</dt><dd>${item.emailConfirmedAt ? "Si" : "No"}</dd>
           <dt>Ultimo login</dt><dd>${escapeHtml(formatMaybeDate(item.lastSignInAt))}</dd>
+          <dt>IP registrazione</dt><dd>${escapeHtml(item.signupIp || "Non ancora visto")}</dd>
+          <dt>Ultimo IP</dt><dd>${escapeHtml(item.lastIp || "Non ancora visto")}</dd>
+          <dt>Ultima visita</dt><dd>${escapeHtml(formatMaybeDate(item.lastSeenAt))}</dd>
         </dl>
       </article>`).join("")
     : `<p class="status-line">Nessun utente registrato trovato.</p>`;
@@ -500,6 +503,7 @@ async function loadRemoteSession() {
   remoteUser = {
     id: profile.id,
     email: session.user.email,
+    emailConfirmed: Boolean(session.user.email_confirmed_at || session.user.confirmed_at),
     nickname: profile.nickname,
     nicknameKey: profile.nickname_key,
     role: profile.role === "ceo" ? "boss" : "member",
@@ -514,6 +518,21 @@ async function registerRemoteVisit() {
   });
   if (error) throw error;
   mapRemoteStats(data);
+}
+
+async function recordRemoteProfileSeen() {
+  const base = ceoApiBase();
+  if (!base || !remoteUser) return;
+  const { data } = await supabaseClient.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) return;
+  await fetch(`${base}/profile/seen`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${token}`,
+    },
+  }).catch(() => {});
 }
 
 async function loadRemoteStats() {
@@ -607,6 +626,7 @@ async function handleRemoteAuth(form, mode) {
   }
 
   await loadRemoteSession();
+  await recordRemoteProfileSeen();
   await refreshRemoteData();
   setStatus("Login online attivo: il tuo account resta collegato automaticamente.", "success");
 }
@@ -659,10 +679,12 @@ async function initializeRemote() {
   try {
     await (window.NICOTINAATV_AUTH_READY || completeEmailRedirectLogin());
     await loadRemoteSession();
+    await recordRemoteProfileSeen();
     await registerRemoteVisit();
     await refreshRemoteData();
     supabaseClient.auth.onAuthStateChange(async () => {
       await loadRemoteSession();
+      await recordRemoteProfileSeen();
       await refreshRemoteData();
     });
     setStatus("", "");
@@ -840,14 +862,29 @@ els.ceoRefreshUsers?.addEventListener("click", async () => {
   }
 });
 
-document.addEventListener("click", (event) => {
+document.addEventListener("click", async (event) => {
   const approveId = event.target?.dataset?.approve;
   const rejectId = event.target?.dataset?.reject;
   const deleteId = event.target?.dataset?.delete;
   if (!approveId && !rejectId && !deleteId) return;
   const user = currentUser();
   if (user?.role !== "boss") return setStatus("Solo il CEO puo fare questa azione.", "error");
-  if (isRemoteMode()) return setStatus("La moderazione CEO online si attiva nel prossimo passo con Cloudflare Worker.", "error");
+  if (isRemoteMode()) {
+    const action = deleteId ? "delete" : approveId ? "approve" : "reject";
+    if (deleteId && !window.confirm("Vuoi eliminare definitivamente questo commento? Non potrai recuperarlo.")) return;
+    try {
+      await ceoFetch(`/ceo/comments/${approveId || rejectId || deleteId}/${action}`, { method: "POST" });
+      await refreshRemoteData();
+      await loadCeoUsers();
+      setStatus(
+        deleteId ? "Commento eliminato definitivamente." : approveId ? "Commento approvato." : "Commento rifiutato.",
+        "success"
+      );
+    } catch (error) {
+      setStatus(error.message || "Azione CEO non riuscita.", "error");
+    }
+    return;
+  }
   const comment = state.comments.find((item) => item.id === (approveId || rejectId || deleteId));
   if (!comment) return setStatus("Commento non trovato.", "error");
   if (deleteId) {
@@ -864,18 +901,30 @@ document.addEventListener("click", (event) => {
   render();
 });
 
-document.addEventListener("submit", (event) => {
+document.addEventListener("submit", async (event) => {
   const form = event.target.closest("[data-reply-form]");
   if (!form) return;
   event.preventDefault();
   const user = currentUser();
   if (user?.role !== "boss") return setStatus("Solo il CEO puo rispondere.", "error");
-  if (isRemoteMode()) return setStatus("Le risposte CEO online si attivano nel prossimo passo con Cloudflare Worker.", "error");
-  const comment = state.comments.find((item) => item.id === form.dataset.replyForm);
-  if (!comment) return setStatus("Commento non trovato.", "error");
   const reply = String(new FormData(form).get("reply") || "").trim();
   const error = validateComment(reply);
   if (error) return setStatus(error, "error");
+  if (isRemoteMode()) {
+    try {
+      await ceoFetch(`/ceo/comments/${form.dataset.replyForm}/reply`, {
+        method: "POST",
+        body: JSON.stringify({ reply }),
+      });
+      await refreshRemoteData();
+      setStatus("Risposta ufficiale pubblicata.", "success");
+    } catch (submitError) {
+      setStatus(submitError.message || "Risposta CEO non riuscita.", "error");
+    }
+    return;
+  }
+  const comment = state.comments.find((item) => item.id === form.dataset.replyForm);
+  if (!comment) return setStatus("Commento non trovato.", "error");
   comment.bossReply = reply;
   saveState();
   setStatus("Risposta ufficiale pubblicata.", "success");
@@ -883,19 +932,29 @@ document.addEventListener("submit", (event) => {
 });
 
 els.downloadLink.addEventListener("click", async (event) => {
+  event.preventDefault();
+  const user = currentUser();
+  const downloadUrl = els.downloadLink.dataset.downloadUrl || els.downloadLink.href;
+  if (!user) {
+    window.location.hash = "commenti";
+    return setStatus("Per scaricare devi registrarti, confermare l'email e fare login.", "error");
+  }
+  if (isRemoteMode() && !user.emailConfirmed) {
+    window.location.hash = "commenti";
+    return setStatus("Prima conferma la tua email, poi potrai scaricare il file ufficiale.", "error");
+  }
   if (isRemoteMode()) {
-    event.preventDefault();
-    const href = els.downloadLink.href;
     try {
       await registerRemoteDownload();
     } finally {
-      window.location.href = href;
+      window.location.href = downloadUrl;
     }
     return;
   }
   state.stats.downloads += 1;
   saveState();
   render();
+  window.location.href = downloadUrl;
 });
 
 const preview = {
