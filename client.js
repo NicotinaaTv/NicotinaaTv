@@ -2,6 +2,16 @@ const STORAGE_KEY = "nicotinaatv_static_site_v1";
 const BOSS_NICKNAME = "NicotinaaTv";
 const LOCAL_CEO_ENABLED = false;
 const NICKNAME_CHANGE_DAYS = 14;
+const REMOTE_VISITOR_KEY = "nicotinaatv_remote_visitor_key";
+const SUPABASE_SETTINGS = window.NICOTINAATV_SUPABASE || {};
+const supabaseClient =
+  window.supabase &&
+  SUPABASE_SETTINGS.url &&
+  SUPABASE_SETTINGS.publishableKey &&
+  !SUPABASE_SETTINGS.publishableKey.includes("INCOLLA_QUI")
+    ? window.supabase.createClient(SUPABASE_SETTINGS.url, SUPABASE_SETTINGS.publishableKey)
+    : null;
+let remoteUser = null;
 
 const reservedNicknameParts = [
   "admin", "administrator", "amministratore", "mod", "moderator", "moderatore", "owner",
@@ -123,6 +133,10 @@ function saveState() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 }
 
+function isRemoteMode() {
+  return Boolean(supabaseClient);
+}
+
 function todayRome() {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Europe/Rome",
@@ -135,6 +149,7 @@ function todayRome() {
 }
 
 function registerVisit() {
+  if (isRemoteMode()) return;
   const today = todayRome();
   if (state.stats.lastDailyDate !== today) {
     state.stats.dailyVisits = 0;
@@ -206,14 +221,17 @@ function validateComment(body) {
 }
 
 function currentUser() {
+  if (isRemoteMode()) return remoteUser;
   return state.users.find((user) => user.nickname === state.sessionNickname) || null;
 }
 
 function permanentUser() {
+  if (isRemoteMode()) return null;
   return state.users.find((user) => user.nicknameKey === state.deviceAccountKey && user.role !== "boss") || null;
 }
 
 function ensurePermanentSession() {
+  if (isRemoteMode()) return;
   if (!state.sessionNickname && state.deviceAccountKey) {
     const lockedUser = permanentUser();
     if (lockedUser) state.sessionNickname = lockedUser.nickname;
@@ -290,6 +308,7 @@ function commentMarkup(comment, mode, user) {
 function render() {
   const user = currentUser();
   const lockedUser = permanentUser();
+  const canModerate = user?.role === "boss" && (!isRemoteMode() || Boolean(SUPABASE_SETTINGS.ceoApiUrl));
   const publicComments = state.comments
     .filter((comment) => comment.status === "approved")
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
@@ -302,14 +321,14 @@ function render() {
   els.downloads.textContent = state.stats.downloads;
   els.sessionBar.hidden = !user;
   els.commentForm.hidden = !user;
-  els.bossPanel.hidden = user?.role !== "boss";
+  els.bossPanel.hidden = !canModerate;
   els.profileChip.hidden = !user;
   els.profileName.textContent = user?.nickname || "";
   els.registerForm.hidden = Boolean(lockedUser || user);
-  els.loginForm.hidden = user?.role === "boss";
+  els.loginForm.hidden = Boolean(user);
   els.nicknameForm.hidden = !user || user.role === "boss";
   els.sessionText.textContent = user
-    ? `Account permanente: ${user.nickname}${user.role === "boss" ? " - CEO" : ""}`
+    ? `${isRemoteMode() ? "Account online" : "Account permanente"}: ${user.nickname}${user.role === "boss" ? " - CEO" : ""}`
     : lockedUser
       ? `Account gia creato su questo browser: ${lockedUser.nickname}`
       : "";
@@ -318,7 +337,7 @@ function render() {
     ? publicComments.map((comment) => commentMarkup(comment, "public", user)).join("")
     : `<p class="status-line">Nessun commento pubblico approvato.</p>`;
 
-  if (user?.role === "boss") {
+  if (canModerate) {
     els.pendingComments.innerHTML = pendingComments.length
       ? pendingComments.map((comment) => commentMarkup(comment, "pending", user)).join("")
       : `<p class="status-line success">Nessun commento in attesa.</p>`;
@@ -345,11 +364,207 @@ function setMenuOpen(open) {
   requestAnimationFrame(applyDeviceMode);
 }
 
+function mapRemoteStats(stats) {
+  if (!stats) return;
+  state.stats.totalVisits = Number(stats.total_visits || 0);
+  state.stats.dailyVisits = Number(stats.daily_visits || 0);
+  state.stats.downloads = Number(stats.total_downloads || 0);
+  state.stats.lastDailyDate = stats.last_daily_date || state.stats.lastDailyDate;
+}
+
+function mapRemoteComment(comment) {
+  return {
+    id: comment.id,
+    nickname: comment.nickname || "Utente",
+    body: comment.body,
+    status: comment.status,
+    bossReply: comment.ceo_reply || "",
+    createdAt: comment.created_at,
+  };
+}
+
+function getRemoteVisitorKey() {
+  let key = localStorage.getItem(REMOTE_VISITOR_KEY);
+  if (!key) {
+    key = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
+    localStorage.setItem(REMOTE_VISITOR_KEY, key);
+  }
+  return key;
+}
+
+async function loadRemoteSession() {
+  const { data, error } = await supabaseClient.auth.getSession();
+  if (error) throw error;
+  const session = data.session;
+  if (!session) {
+    remoteUser = null;
+    state.sessionNickname = "";
+    return;
+  }
+
+  const { data: profile, error: profileError } = await supabaseClient
+    .from("profiles")
+    .select("id,nickname,nickname_key,role,nickname_changed_at")
+    .eq("id", session.user.id)
+    .single();
+  if (profileError) throw profileError;
+
+  remoteUser = {
+    id: profile.id,
+    email: session.user.email,
+    nickname: profile.nickname,
+    nicknameKey: profile.nickname_key,
+    role: profile.role === "ceo" ? "boss" : "member",
+    nicknameChangedAt: profile.nickname_changed_at,
+  };
+  state.sessionNickname = remoteUser.nickname;
+}
+
+async function registerRemoteVisit() {
+  const { data, error } = await supabaseClient.rpc("register_site_visit", {
+    p_visitor_key: getRemoteVisitorKey(),
+  });
+  if (error) throw error;
+  mapRemoteStats(data);
+}
+
+async function loadRemoteStats() {
+  const { data, error } = await supabaseClient
+    .from("site_stats")
+    .select("total_visits,daily_visits,total_downloads,last_daily_date")
+    .eq("id", "global")
+    .single();
+  if (error) throw error;
+  mapRemoteStats(data);
+}
+
+async function loadRemoteComments() {
+  const { data, error } = await supabaseClient
+    .from("comments")
+    .select("id,nickname,body,status,ceo_reply,created_at")
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  state.comments = (data || []).map(mapRemoteComment);
+}
+
+async function refreshRemoteData() {
+  await Promise.all([loadRemoteStats(), loadRemoteComments()]);
+  render();
+}
+
+async function registerRemoteDownload() {
+  const { data, error } = await supabaseClient.rpc("register_site_download");
+  if (error) throw error;
+  mapRemoteStats(data);
+  render();
+}
+
+async function handleRemoteAuth(form, mode) {
+  const formData = new FormData(form);
+  const email = String(formData.get("email") || "").trim().toLowerCase();
+  const password = String(formData.get("password") || "");
+
+  if (!email || !email.includes("@")) return setStatus("Inserisci una email valida.", "error");
+  if (password.length < 8) return setStatus("La password deve avere almeno 8 caratteri.", "error");
+
+  if (mode === "register") {
+    const nickname = String(formData.get("nickname") || "").trim();
+    const nickError = validateNickname(nickname);
+    if (nickError) return setStatus(nickError, "error");
+    setStatus("Creo l'account online...", "");
+    const { data, error } = await supabaseClient.auth.signUp({
+      email,
+      password,
+      options: { data: { nickname } },
+    });
+    if (error) return setStatus(error.message || "Registrazione non riuscita.", "error");
+    form.reset();
+    if (!data.session) {
+      return setStatus("Account creato. Controlla la tua email se Supabase richiede conferma.", "success");
+    }
+  } else {
+    setStatus("Accesso in corso...", "");
+    const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
+    if (error) return setStatus("Email o password non corrette.", "error");
+    form.reset();
+  }
+
+  await loadRemoteSession();
+  await refreshRemoteData();
+  setStatus("Login online attivo: il tuo account resta collegato automaticamente.", "success");
+}
+
+async function updateRemoteNickname(nickname) {
+  const user = currentUser();
+  if (!user || user.role === "boss") return setStatus("Il nickname CEO e fisso e protetto.", "error");
+
+  const previousLocalChange = state.lastNicknameChangeAt;
+  state.lastNicknameChangeAt = user.nicknameChangedAt || "";
+  const remainingDays = daysUntilNicknameChange();
+  state.lastNicknameChangeAt = previousLocalChange;
+  if (remainingDays > 0) return setStatus(`Puoi cambiare nickname tra ${remainingDays} giorni.`, "error");
+
+  const nicknameKey = normalize(nickname);
+  const nickError = validateNickname(nickname);
+  if (nickError) return setStatus(nickError, "error");
+
+  const { error } = await supabaseClient
+    .from("profiles")
+    .update({
+      nickname,
+      nickname_key: nicknameKey,
+      nickname_changed_at: new Date().toISOString(),
+    })
+    .eq("id", user.id);
+  if (error) return setStatus("Nickname non disponibile o non permesso.", "error");
+
+  await loadRemoteSession();
+  await refreshRemoteData();
+  els.nicknameForm.reset();
+  setStatus("Nickname aggiornato online. Potrai cambiarlo di nuovo tra 14 giorni.", "success");
+}
+
+async function submitRemoteComment(body) {
+  const user = currentUser();
+  if (!user) return setStatus("Devi effettuare il login.", "error");
+  const { error } = await supabaseClient.from("comments").insert({
+    user_id: user.id,
+    body,
+    status: "pending",
+  });
+  if (error) return setStatus(error.message || "Commento non inviato.", "error");
+  await refreshRemoteData();
+  els.commentForm.reset();
+  setStatus("Commento inviato: il CEO potra approvarlo.", "success");
+}
+
+async function initializeRemote() {
+  try {
+    await loadRemoteSession();
+    await registerRemoteVisit();
+    await refreshRemoteData();
+    supabaseClient.auth.onAuthStateChange(async () => {
+      await loadRemoteSession();
+      await refreshRemoteData();
+    });
+    setStatus("Supabase collegato: account, commenti e contatori sono online.", "success");
+  } catch (error) {
+    setStatus(`Supabase non collegato: ${error.message || "controlla la chiave pubblica."}`, "error");
+    render();
+  }
+}
+
 const state = loadState();
 ensurePermanentSession();
-registerVisit();
-render();
 applyDeviceMode();
+
+if (isRemoteMode()) {
+  render();
+  initializeRemote();
+} else {
+  registerVisit();
+  render();
+}
 
 els.menuToggle?.addEventListener("click", () => {
   setMenuOpen(!document.body.classList.contains("menu-open"));
@@ -362,10 +577,14 @@ els.topbar?.querySelectorAll('a[href^="#"]').forEach((link) => {
 });
 
 for (const form of els.authForms) {
-  form.addEventListener("submit", (event) => {
+  form.addEventListener("submit", async (event) => {
     event.preventDefault();
     const formData = new FormData(form);
     const mode = form.dataset.authForm;
+    if (isRemoteMode()) {
+      await handleRemoteAuth(form, mode);
+      return;
+    }
     const nickname = String(formData.get("nickname") || "").trim();
     const password = String(formData.get("password") || "");
     const nicknameKey = normalize(nickname);
@@ -408,17 +627,22 @@ for (const form of els.authForms) {
   });
 }
 
-els.nicknameForm.addEventListener("submit", (event) => {
+els.nicknameForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   const user = currentUser();
   if (!user || user.role === "boss") return setStatus("Il nickname CEO e fisso e protetto.", "error");
+  const nickname = String(new FormData(els.nicknameForm).get("nickname") || "").trim();
+
+  if (isRemoteMode()) {
+    await updateRemoteNickname(nickname);
+    return;
+  }
 
   const remainingDays = daysUntilNicknameChange();
   if (remainingDays > 0) {
     return setStatus(`Puoi cambiare nickname tra ${remainingDays} giorni.`, "error");
   }
 
-  const nickname = String(new FormData(els.nicknameForm).get("nickname") || "").trim();
   const nicknameKey = normalize(nickname);
   const nickError = validateNickname(nickname);
   if (nickError) return setStatus(nickError, "error");
@@ -441,13 +665,17 @@ els.nicknameForm.addEventListener("submit", (event) => {
   render();
 });
 
-els.commentForm.addEventListener("submit", (event) => {
+els.commentForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   const user = currentUser();
   if (!user) return setStatus("Devi effettuare il login.", "error");
   const body = String(new FormData(els.commentForm).get("body") || "").trim();
   const error = validateComment(body);
   if (error) return setStatus(error, "error");
+  if (isRemoteMode()) {
+    await submitRemoteComment(body);
+    return;
+  }
   state.comments.push({
     id: crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`,
     nickname: user.nickname,
@@ -469,6 +697,7 @@ document.addEventListener("click", (event) => {
   if (!approveId && !rejectId && !deleteId) return;
   const user = currentUser();
   if (user?.role !== "boss") return setStatus("Solo il CEO puo fare questa azione.", "error");
+  if (isRemoteMode()) return setStatus("La moderazione CEO online si attiva nel prossimo passo con Cloudflare Worker.", "error");
   const comment = state.comments.find((item) => item.id === (approveId || rejectId || deleteId));
   if (!comment) return setStatus("Commento non trovato.", "error");
   if (deleteId) {
@@ -491,6 +720,7 @@ document.addEventListener("submit", (event) => {
   event.preventDefault();
   const user = currentUser();
   if (user?.role !== "boss") return setStatus("Solo il CEO puo rispondere.", "error");
+  if (isRemoteMode()) return setStatus("Le risposte CEO online si attivano nel prossimo passo con Cloudflare Worker.", "error");
   const comment = state.comments.find((item) => item.id === form.dataset.replyForm);
   if (!comment) return setStatus("Commento non trovato.", "error");
   const reply = String(new FormData(form).get("reply") || "").trim();
@@ -502,7 +732,17 @@ document.addEventListener("submit", (event) => {
   render();
 });
 
-els.downloadLink.addEventListener("click", () => {
+els.downloadLink.addEventListener("click", async (event) => {
+  if (isRemoteMode()) {
+    event.preventDefault();
+    const href = els.downloadLink.href;
+    try {
+      await registerRemoteDownload();
+    } finally {
+      window.location.href = href;
+    }
+    return;
+  }
   state.stats.downloads += 1;
   saveState();
   render();

@@ -11,6 +11,8 @@
     <link rel="icon" type="image/png" href="assets/logo.png" />
     <link rel="apple-touch-icon" href="assets/logo.png" />
     <link rel="stylesheet" href="styles.css" />
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
+    <script src="supabase-config.js" defer></script>
     <script src="client.js" defer></script>
   </head>
   <body>
@@ -62,7 +64,7 @@
               data-download-link
             >
               <span>Scarica ZIP ufficiale</span>
-              <small>NicotinaaTv Extractor V1.0.zip</small>
+              <small>GitHub Release ufficiale v1.0</small>
             </a>
             <a class="outline-button" href="#sicurezza">Controlla hash</a>
           </div>
@@ -163,14 +165,18 @@
           <p class="eyebrow">Community</p>
           <h2>Commenti e aggiornamenti.</h2>
           <p>
-            Questa versione HTML funziona senza server ed e' pronta per GitHub
-            Pages. I commenti vengono salvati nel browser in cui li scrivi.
+            Gli account usano email, nickname e password. Sul sito pubblico si
+            vede solo il nickname: l'email resta per il login.
           </p>
         </div>
 
         <div class="auth-layout">
           <form class="auth-panel reveal" data-auth-form="register">
             <h3>Registrati</h3>
+            <label>
+              Email
+              <input name="email" type="email" autocomplete="email" required />
+            </label>
             <label>
               Nickname
               <input name="nickname" autocomplete="username" maxlength="24" required />
@@ -185,8 +191,8 @@
           <form class="auth-panel reveal" data-auth-form="login">
             <h3>Accedi</h3>
             <label>
-              Nickname
-              <input name="nickname" autocomplete="username" required />
+              Email
+              <input name="email" type="email" autocomplete="email" required />
             </label>
             <label>
               Password
