@@ -3,6 +3,7 @@ const BOSS_NICKNAME = "NicotinaaTv";
 const LOCAL_CEO_ENABLED = false;
 const NICKNAME_CHANGE_DAYS = 14;
 const REMOTE_VISITOR_KEY = "nicotinaatv_remote_visitor_key";
+const CEO_TOKEN_KEY = "nicotinaatv_ceo_token";
 const PUBLIC_SITE_URL = "https://nicotinaatv.github.io/NicotinaaTv/";
 const SUPABASE_SETTINGS = window.NICOTINAATV_SUPABASE || {};
 const supabaseClient =
@@ -64,6 +65,11 @@ const els = {
   publicComments: document.querySelector("[data-public-comments]"),
   pendingComments: document.querySelector("[data-pending-comments]"),
   bossPanel: document.querySelector("[data-boss-panel]"),
+  ceoLoginPanel: document.querySelector("[data-ceo-login-panel]"),
+  ceoLoginForm: document.querySelector("[data-ceo-login-form]"),
+  ceoTools: document.querySelector("[data-ceo-tools]"),
+  ceoUsers: document.querySelector("[data-ceo-users]"),
+  ceoRefreshUsers: document.querySelector("[data-ceo-refresh-users]"),
   authForms: document.querySelectorAll("[data-auth-form]"),
   registerForm: document.querySelector('[data-auth-form="register"]'),
   loginForm: document.querySelector('[data-auth-form="login"]'),
@@ -226,6 +232,18 @@ function currentUser() {
   return state.users.find((user) => user.nickname === state.sessionNickname) || null;
 }
 
+function ceoApiBase() {
+  return String(SUPABASE_SETTINGS.ceoApiUrl || "").replace(/\/+$/, "");
+}
+
+function getCeoToken() {
+  return sessionStorage.getItem(CEO_TOKEN_KEY) || "";
+}
+
+function setCeoToken(token) {
+  sessionStorage.setItem(CEO_TOKEN_KEY, token);
+}
+
 function permanentUser() {
   if (isRemoteMode()) return null;
   return state.users.find((user) => user.nicknameKey === state.deviceAccountKey && user.role !== "boss") || null;
@@ -306,10 +324,32 @@ function commentMarkup(comment, mode, user) {
   </article>`;
 }
 
+function formatMaybeDate(value) {
+  return value ? formatDate(value) : "Mai";
+}
+
+function renderCeoUsers(users = []) {
+  if (!els.ceoUsers) return;
+  els.ceoUsers.innerHTML = users.length
+    ? users.map((item) => `<article class="ceo-user-card">
+        <div>
+          <strong>${escapeHtml(item.nickname || "Senza nickname")}</strong>
+          <span>${escapeHtml(item.email || "Email non trovata")}</span>
+        </div>
+        <dl>
+          <dt>Ruolo</dt><dd>${escapeHtml(item.role || "member")}</dd>
+          <dt>Email confermata</dt><dd>${item.emailConfirmedAt ? "Si" : "No"}</dd>
+          <dt>Ultimo login</dt><dd>${escapeHtml(formatMaybeDate(item.lastSignInAt))}</dd>
+        </dl>
+      </article>`).join("")
+    : `<p class="status-line">Nessun utente registrato trovato.</p>`;
+}
+
 function render() {
   const user = currentUser();
   const lockedUser = permanentUser();
   const canModerate = user?.role === "boss" && (!isRemoteMode() || Boolean(SUPABASE_SETTINGS.ceoApiUrl));
+  const ceoUnlocked = canModerate && Boolean(getCeoToken());
   const publicComments = state.comments
     .filter((comment) => comment.status === "approved")
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
@@ -323,6 +363,8 @@ function render() {
   els.sessionBar.hidden = !user;
   els.commentForm.hidden = !user;
   els.bossPanel.hidden = !canModerate;
+  if (els.ceoLoginPanel) els.ceoLoginPanel.hidden = !canModerate || ceoUnlocked;
+  if (els.ceoTools) els.ceoTools.hidden = !ceoUnlocked;
   els.profileChip.hidden = !user;
   els.profileName.textContent = user?.nickname || "";
   els.registerForm.hidden = Boolean(lockedUser || user);
@@ -503,6 +545,32 @@ async function registerRemoteDownload() {
   if (error) throw error;
   mapRemoteStats(data);
   render();
+}
+
+async function ceoFetch(path, options = {}) {
+  const base = ceoApiBase();
+  if (!base) throw new Error("Backend CEO non configurato.");
+  const response = await fetch(`${base}${path}`, {
+    ...options,
+    headers: {
+      "content-type": "application/json",
+      "x-ceo-token": getCeoToken(),
+      ...(options.headers || {}),
+    },
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    if (response.status === 401) sessionStorage.removeItem(CEO_TOKEN_KEY);
+    throw new Error(data.error || "Azione CEO non riuscita.");
+  }
+  return data;
+}
+
+async function loadCeoUsers() {
+  if (!els.ceoUsers || !getCeoToken()) return;
+  els.ceoUsers.innerHTML = `<p class="status-line">Carico utenti registrati...</p>`;
+  const data = await ceoFetch("/ceo/users");
+  renderCeoUsers(data.users || []);
 }
 
 async function handleRemoteAuth(form, mode) {
@@ -738,6 +806,38 @@ els.commentForm.addEventListener("submit", async (event) => {
   els.commentForm.reset();
   setStatus(user.role === "boss" ? "Commento pubblicato." : "Commento inviato: il CEO puo approvarlo.", "success");
   render();
+});
+
+els.ceoLoginForm?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const password = String(new FormData(els.ceoLoginForm).get("password") || "");
+  try {
+    const base = ceoApiBase();
+    if (!base) return setStatus("Backend CEO non ancora collegato.", "error");
+    const response = await fetch(`${base}/ceo/login`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ password }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) return setStatus(data.error || "Accesso CEO non riuscito.", "error");
+    setCeoToken(data.token);
+    els.ceoLoginForm.reset();
+    render();
+    await loadCeoUsers();
+    setStatus("Pannello CEO sbloccato.", "success");
+  } catch (error) {
+    setStatus(error.message || "Accesso CEO non riuscito.", "error");
+  }
+});
+
+els.ceoRefreshUsers?.addEventListener("click", async () => {
+  try {
+    await loadCeoUsers();
+    setStatus("Lista utenti aggiornata.", "success");
+  } catch (error) {
+    setStatus(error.message || "Impossibile caricare gli utenti.", "error");
+  }
 });
 
 document.addEventListener("click", (event) => {

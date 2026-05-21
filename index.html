@@ -226,6 +226,26 @@
             <p class="eyebrow">CEO Panel</p>
             <h2>Commenti in attesa</h2>
           </div>
+          <div class="ceo-access" data-ceo-login-panel hidden>
+            <h3>Accesso protetto CEO</h3>
+            <form data-ceo-login-form>
+              <label>
+                Password CEO
+                <input name="password" type="password" autocomplete="current-password" required />
+              </label>
+              <button type="submit">Sblocca pannello</button>
+            </form>
+          </div>
+          <div class="ceo-tools" data-ceo-tools hidden>
+            <div class="ceo-tools-head">
+              <div>
+                <h3>Utenti registrati</h3>
+                <p>Visibile solo al CEO tramite backend protetto.</p>
+              </div>
+              <button type="button" data-ceo-refresh-users>Aggiorna utenti</button>
+            </div>
+            <div class="ceo-user-list" data-ceo-users></div>
+          </div>
           <div class="comment-list" data-pending-comments></div>
         </div>
 
