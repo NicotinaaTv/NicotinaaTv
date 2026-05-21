@@ -686,7 +686,7 @@ els.commentForm.addEventListener("submit", async (event) => {
   });
   saveState();
   els.commentForm.reset();
-  setStatus(user.role === "boss" ? "Commento pubblicato." : "Commento inviato: il CEO puo approvarlo.", "success");
+  setStatus(user.role === "boss" ? "Commento pubblicato." : "Commento inviato: NicotinaaTv puo approvarlo.", "success");
   render();
 });
 
@@ -696,7 +696,7 @@ document.addEventListener("click", (event) => {
   const deleteId = event.target?.dataset?.delete;
   if (!approveId && !rejectId && !deleteId) return;
   const user = currentUser();
-  if (user?.role !== "boss") return setStatus("Solo il CEO puo fare questa azione.", "error");
+  if (user?.role !== "boss") return setStatus("Solo NicotinaaTv puo fare questa azione.", "error");
   if (isRemoteMode()) return setStatus("La moderazione CEO online si attiva nel prossimo passo con Cloudflare Worker.", "error");
   const comment = state.comments.find((item) => item.id === (approveId || rejectId || deleteId));
   if (!comment) return setStatus("Commento non trovato.", "error");
