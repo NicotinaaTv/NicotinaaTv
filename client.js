@@ -397,6 +397,47 @@ function authRedirectUrl() {
   return PUBLIC_SITE_URL;
 }
 
+function cleanAuthUrl() {
+  const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+  const authHashKeys = ["access_token", "refresh_token", "expires_in", "token_type", "type", "error", "error_code", "error_description"];
+  const hasAuthHash = authHashKeys.some((key) => hashParams.has(key));
+  const keepHash = hasAuthHash ? "" : window.location.hash;
+  window.history.replaceState({}, document.title, `${window.location.origin}${window.location.pathname}${keepHash}`);
+}
+
+async function completeEmailRedirectLogin() {
+  const url = new URL(window.location.href);
+  const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+  const errorDescription = url.searchParams.get("error_description") || hashParams.get("error_description");
+  const code = url.searchParams.get("code");
+  const accessToken = hashParams.get("access_token");
+  const refreshToken = hashParams.get("refresh_token");
+
+  if (errorDescription) {
+    cleanAuthUrl();
+    setStatus("Link email non valido o scaduto. Rifai la registrazione per ricevere una nuova email.", "error");
+    return;
+  }
+
+  if (code) {
+    const { error } = await supabaseClient.auth.exchangeCodeForSession(code);
+    cleanAuthUrl();
+    if (error) throw error;
+    setStatus("Email confermata: login effettuato automaticamente.", "success");
+    return;
+  }
+
+  if (accessToken && refreshToken) {
+    const { error } = await supabaseClient.auth.setSession({
+      access_token: accessToken,
+      refresh_token: refreshToken,
+    });
+    cleanAuthUrl();
+    if (error) throw error;
+    setStatus("Email confermata: login effettuato automaticamente.", "success");
+  }
+}
+
 async function loadRemoteSession() {
   const { data, error } = await supabaseClient.auth.getSession();
   if (error) throw error;
@@ -548,6 +589,7 @@ async function submitRemoteComment(body) {
 
 async function initializeRemote() {
   try {
+    await (window.NICOTINAATV_AUTH_READY || completeEmailRedirectLogin());
     await loadRemoteSession();
     await registerRemoteVisit();
     await refreshRemoteData();

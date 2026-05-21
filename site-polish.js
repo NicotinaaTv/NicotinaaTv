@@ -1,6 +1,42 @@
 (function () {
   const OFFICIAL_SITE_URL = "https://nicotinaatv.github.io/NicotinaaTv/";
 
+  function cleanAuthUrl() {
+    const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+    const authHashKeys = ["access_token", "refresh_token", "expires_in", "token_type", "type", "error", "error_code", "error_description"];
+    const hasAuthHash = authHashKeys.some((key) => hashParams.has(key));
+    const keepHash = hasAuthHash ? "" : window.location.hash;
+    window.history.replaceState({}, document.title, `${window.location.origin}${window.location.pathname}${keepHash}`);
+  }
+
+  async function completeEmailRedirectLogin(client) {
+    const url = new URL(window.location.href);
+    const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+    const code = url.searchParams.get("code");
+    const accessToken = hashParams.get("access_token");
+    const refreshToken = hashParams.get("refresh_token");
+    const hasAuthError = url.searchParams.has("error") || hashParams.has("error");
+
+    if (hasAuthError) {
+      cleanAuthUrl();
+      return;
+    }
+
+    if (code) {
+      await client.auth.exchangeCodeForSession(code);
+      cleanAuthUrl();
+      return;
+    }
+
+    if (accessToken && refreshToken) {
+      await client.auth.setSession({
+        access_token: accessToken,
+        refresh_token: refreshToken,
+      });
+      cleanAuthUrl();
+    }
+  }
+
   if (window.supabase?.createClient) {
     const originalCreateClient = window.supabase.createClient.bind(window.supabase);
     window.supabase.createClient = function createClientWithOfficialRedirect(...args) {
@@ -18,6 +54,7 @@
           return originalSignUp(patchedCredentials);
         };
       }
+      window.NICOTINAATV_AUTH_READY = completeEmailRedirectLogin(client);
       return client;
     };
   }
