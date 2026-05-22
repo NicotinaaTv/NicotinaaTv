@@ -3,6 +3,7 @@
   const AUTH_SYNC_KEY = "nicotinaatv_auth_sync_v1";
   const AUTH_CHANNEL_NAME = "nicotinaatv-auth";
   const AUTH_TAB_KEY = "nicotinaatv_auth_tab_id";
+  const AUTH_BRIDGE_ID = "nicotinaatv-auth-bridge";
   const AUTH_TAB_ID = (() => {
     try {
       const saved = sessionStorage.getItem(AUTH_TAB_KEY);
@@ -14,6 +15,71 @@
       return `${Date.now()}-${Math.random()}`;
     }
   })();
+
+  function showAuthBridgeScreen(type = "loading") {
+    let bridge = document.getElementById(AUTH_BRIDGE_ID);
+    if (!bridge) {
+      bridge = document.createElement("div");
+      bridge.id = AUTH_BRIDGE_ID;
+      bridge.setAttribute("role", "status");
+      bridge.setAttribute("aria-live", "polite");
+      bridge.style.cssText = [
+        "position:fixed",
+        "inset:0",
+        "z-index:999999",
+        "display:grid",
+        "place-items:center",
+        "padding:24px",
+        "background:radial-gradient(circle at 50% 25%, rgba(255,79,176,.18), transparent 34%), #050007",
+        "color:#fff4fb",
+        "font-family:Arial,sans-serif",
+        "text-align:center",
+      ].join(";");
+      document.documentElement.style.background = "#050007";
+      document.body?.appendChild(bridge);
+    }
+
+    const copy = {
+      loading: {
+        title: "Confermo il tuo account...",
+        text: "Resta un attimo qui: sto collegando la registrazione alla pagina NicotinaaTv gia aperta.",
+        action: "",
+      },
+      done: {
+        title: "Account confermato",
+        text: "La pagina NicotinaaTv gia aperta si sta aggiornando. Provo a chiudere questa scheda automaticamente.",
+        action: "",
+      },
+      blocked: {
+        title: "Account confermato",
+        text: "Chrome non mi ha permesso di chiudere questa scheda. Torna alla pagina NicotinaaTv gia aperta: ora si ricarica gia loggata.",
+        action: `<a href="${OFFICIAL_SITE_URL}#commenti" style="display:inline-block;margin-top:18px;padding:13px 22px;border-radius:999px;background:linear-gradient(135deg,#ff4fb0,#d9a4ff,#a36bff);color:#17001c;text-decoration:none;font-weight:900;">Torna al sito</a>`,
+      },
+      error: {
+        title: "Link non valido o scaduto",
+        text: "Rifai la registrazione per ricevere una nuova email di conferma.",
+        action: `<a href="${OFFICIAL_SITE_URL}#commenti" style="display:inline-block;margin-top:18px;padding:13px 22px;border-radius:999px;background:linear-gradient(135deg,#ff4fb0,#d9a4ff,#a36bff);color:#17001c;text-decoration:none;font-weight:900;">Torna al sito</a>`,
+      },
+    }[type] || {};
+
+    bridge.innerHTML = `
+      <div style="max-width:520px;width:min(100%,520px);border:1px solid rgba(255,79,176,.72);border-radius:18px;padding:32px 24px;background:rgba(20,0,25,.86);box-shadow:0 0 26px rgba(255,79,176,.35), inset 0 0 22px rgba(217,164,255,.16);">
+        <div style="width:74px;height:74px;margin:0 auto 18px;border-radius:50%;background:radial-gradient(circle,#ff4fb0,#8b2cff 62%,#17001c);box-shadow:0 0 24px #ff4fb0;"></div>
+        <h1 style="margin:0 0 12px;font-size:30px;line-height:1.1;color:#fff4fb;text-shadow:0 0 18px #ff4fb0;">${copy.title}</h1>
+        <p style="margin:0;color:#d9a4ff;font-size:16px;line-height:1.55;">${copy.text}</p>
+        ${copy.action}
+      </div>
+    `;
+  }
+
+  function closeAuthBridgeTab() {
+    window.setTimeout(() => {
+      window.close();
+      window.setTimeout(() => {
+        if (!document.hidden) showAuthBridgeScreen("blocked");
+      }, 700);
+    }, 700);
+  }
 
   function notifyAuthSync(reason) {
     const payload = JSON.stringify({
@@ -48,9 +114,13 @@
     const accessToken = hashParams.get("access_token");
     const refreshToken = hashParams.get("refresh_token");
     const hasAuthError = url.searchParams.has("error") || hashParams.has("error");
+    const isAuthRedirect = hasAuthError || code || (accessToken && refreshToken);
+
+    if (isAuthRedirect) showAuthBridgeScreen("loading");
 
     if (hasAuthError) {
       cleanAuthUrl();
+      showAuthBridgeScreen("error");
       return;
     }
 
@@ -58,6 +128,8 @@
       await client.auth.exchangeCodeForSession(code);
       cleanAuthUrl();
       notifyAuthSync("email-confirmed");
+      showAuthBridgeScreen("done");
+      closeAuthBridgeTab();
       return;
     }
 
@@ -68,6 +140,8 @@
       });
       cleanAuthUrl();
       notifyAuthSync("email-confirmed");
+      showAuthBridgeScreen("done");
+      closeAuthBridgeTab();
     }
   }
 
