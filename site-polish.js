@@ -1,199 +1,269 @@
-(function () {
-  const OFFICIAL_SITE_URL = "https://nicotinaatv.github.io/NicotinaaTv/";
-  const AUTH_SYNC_KEY = "nicotinaatv_auth_sync_v1";
-  const AUTH_CHANNEL_NAME = "nicotinaatv-auth";
-  const AUTH_TAB_KEY = "nicotinaatv_auth_tab_id";
-  const AUTH_BRIDGE_ID = "nicotinaatv-auth-bridge";
-  const AUTH_TAB_ID = (() => {
-    try {
-      const saved = sessionStorage.getItem(AUTH_TAB_KEY);
-      if (saved) return saved;
-      const created = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
-      sessionStorage.setItem(AUTH_TAB_KEY, created);
-      return created;
-    } catch {
-      return `${Date.now()}-${Math.random()}`;
-    }
-  })();
+<!doctype html>
+<html lang="it">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>NicotinaaTv Extractor V1.0 - Download Ufficiale</title>
+    <meta
+      name="description"
+      content="Download ufficiale di NicotinaaTv Extractor V1.0 per estrarre veicoli RPF FiveM e generare resource con stream, data e fxmanifest."
+    />
+    <link rel="icon" type="image/png" href="assets/logo.png" />
+    <link rel="apple-touch-icon" href="assets/logo.png" />
+    <link rel="stylesheet" href="styles.css" />
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
+    <script src="supabase-config.js" defer></script>
+    <script src="site-polish.js" defer></script>
+    <script src="client.js" defer></script>
+  </head>
+  <body>
+    <canvas id="fx" aria-hidden="true"></canvas>
+    <div class="neon-word" aria-hidden="true">
+      <span>N</span><span>i</span><span>c</span><span>o</span><span>t</span><span>i</span><span>n</span><span>a</span><span>a</span><span>T</span><span>v</span>
+    </div>
 
-  function showAuthBridgeScreen(type = "loading") {
-    let bridge = document.getElementById(AUTH_BRIDGE_ID);
-    if (!bridge) {
-      bridge = document.createElement("div");
-      bridge.id = AUTH_BRIDGE_ID;
-      bridge.setAttribute("role", "status");
-      bridge.setAttribute("aria-live", "polite");
-      bridge.style.cssText = [
-        "position:fixed",
-        "inset:0",
-        "z-index:999999",
-        "display:grid",
-        "place-items:center",
-        "padding:24px",
-        "background:radial-gradient(circle at 50% 25%, rgba(255,79,176,.18), transparent 34%), #050007",
-        "color:#fff4fb",
-        "font-family:Arial,sans-serif",
-        "text-align:center",
-      ].join(";");
-      document.documentElement.style.background = "#050007";
-      document.body?.appendChild(bridge);
-    }
-
-    const copy = {
-      loading: {
-        title: "Confermo il tuo account...",
-        text: "Resta un attimo qui: sto collegando la registrazione alla pagina NicotinaaTv gia aperta.",
-        action: "",
-      },
-      done: {
-        title: "Account confermato",
-        text: "La pagina NicotinaaTv gia aperta si sta aggiornando. Provo a chiudere questa scheda automaticamente.",
-        action: "",
-      },
-      blocked: {
-        title: "Account confermato",
-        text: "Chrome non mi ha permesso di chiudere questa scheda. Torna alla pagina NicotinaaTv gia aperta: ora si ricarica gia loggata.",
-        action: `<a href="${OFFICIAL_SITE_URL}#commenti" style="display:inline-block;margin-top:18px;padding:13px 22px;border-radius:999px;background:linear-gradient(135deg,#ff4fb0,#d9a4ff,#a36bff);color:#17001c;text-decoration:none;font-weight:900;">Torna al sito</a>`,
-      },
-      error: {
-        title: "Link non valido o scaduto",
-        text: "Rifai la registrazione per ricevere una nuova email di conferma.",
-        action: `<a href="${OFFICIAL_SITE_URL}#commenti" style="display:inline-block;margin-top:18px;padding:13px 22px;border-radius:999px;background:linear-gradient(135deg,#ff4fb0,#d9a4ff,#a36bff);color:#17001c;text-decoration:none;font-weight:900;">Torna al sito</a>`,
-      },
-    }[type] || {};
-
-    bridge.innerHTML = `
-      <div style="max-width:520px;width:min(100%,520px);border:1px solid rgba(255,79,176,.72);border-radius:18px;padding:32px 24px;background:rgba(20,0,25,.86);box-shadow:0 0 26px rgba(255,79,176,.35), inset 0 0 22px rgba(217,164,255,.16);">
-        <div style="width:74px;height:74px;margin:0 auto 18px;border-radius:50%;background:radial-gradient(circle,#ff4fb0,#8b2cff 62%,#17001c);box-shadow:0 0 24px #ff4fb0;"></div>
-        <h1 style="margin:0 0 12px;font-size:30px;line-height:1.1;color:#fff4fb;text-shadow:0 0 18px #ff4fb0;">${copy.title}</h1>
-        <p style="margin:0;color:#d9a4ff;font-size:16px;line-height:1.55;">${copy.text}</p>
-        ${copy.action}
+    <header class="topbar">
+      <a class="brand" href="#home" aria-label="NicotinaaTv home">
+        <img src="assets/logo.png" alt="NicotinaaTv" draggable="false" />
+        <span>NicotinaaTv</span>
+      </a>
+      <button class="menu-toggle" type="button" aria-label="Apri menu" aria-expanded="false" data-menu-toggle>
+        <span></span>
+        <span></span>
+        <span></span>
+      </button>
+      <div class="top-actions">
+        <nav aria-label="Navigazione principale">
+          <a href="#download">Download</a>
+          <a href="#funzioni">Funzioni</a>
+          <a href="#assistenza">Discord</a>
+          <a href="#commenti">Commenti</a>
+          <a href="#social">Social</a>
+        </nav>
+        <a class="profile-chip" href="#commenti" hidden data-profile-chip aria-label="Account">
+          <img src="assets/default-avatar.svg" alt="" />
+          <span data-profile-name></span>
+        </a>
       </div>
-    `;
-  }
+    </header>
 
-  function closeAuthBridgeTab() {
-    window.setTimeout(() => {
-      try {
-        window.open("", "_self");
-      } catch {}
-      window.close();
-      window.setTimeout(() => {
-        if (!document.hidden) showAuthBridgeScreen("blocked");
-      }, 700);
-    }, 700);
-  }
+    <main id="home">
+      <section class="hero section-shell">
+        <div class="hero-copy reveal">
+          <p class="eyebrow">Download ufficiale</p>
+          <h1>NicotinaaTv Extractor V1.0</h1>
+          <p class="lead">
+            Vuoi estrarre veicoli RPF per FiveM in modo piu veloce e ordinato?
+            Trascini uno o piu DLC.RPF dentro l'app, scegli la cartella di output
+            e il programma prepara automaticamente la resource FiveM con stream,
+            data e fxmanifest.
+          </p>
+          <div class="hero-actions" id="download">
+            <a
+              class="download-button"
+              href="#commenti"
+              data-download-link
+            >
+              <span>Scarica ZIP ufficiale</span>
+              <small data-download-hint>Richiede login Discord</small>
+            </a>
+            <a class="outline-button" href="#sicurezza">Controlla hash</a>
+          </div>
+          <p class="download-status status-line" data-download-status role="status" aria-live="polite"></p>
+          <div class="download-meter" aria-live="polite">
+            <span>Download ufficiali</span>
+            <strong data-downloads>0</strong>
+          </div>
+        </div>
 
-  function notifyAuthSync(reason) {
-    const payload = JSON.stringify({
-      reason,
-      sourceId: AUTH_TAB_ID,
-      at: Date.now(),
-    });
-    try {
-      localStorage.setItem(AUTH_SYNC_KEY, payload);
-    } catch {}
-    try {
-      const channel = new BroadcastChannel(AUTH_CHANNEL_NAME);
-      channel.postMessage(JSON.parse(payload));
-      channel.close();
-    } catch {}
-  }
+        <div class="logo-stage reveal" aria-label="Logo NicotinaaTv">
+          <span class="ring ring-one"></span>
+          <span class="ring ring-two"></span>
+          <img src="assets/logo.png" alt="Logo NicotinaaTv" draggable="false" />
+        </div>
+      </section>
 
-  function cleanAuthUrl() {
-    const url = new URL(window.location.href);
-    ["code", "error", "error_code", "error_description"].forEach((key) => url.searchParams.delete(key));
-    const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
-    const authHashKeys = ["access_token", "refresh_token", "expires_in", "token_type", "type", "error", "error_code", "error_description"];
-    const hasAuthHash = authHashKeys.some((key) => hashParams.has(key));
-    const keepHash = hasAuthHash ? "#commenti" : window.location.hash || "#commenti";
-    window.history.replaceState({}, document.title, `${url.origin}${url.pathname}${url.search}${keepHash}`);
-  }
+      <section class="video-showcase section-shell reveal" id="anteprima">
+        <div class="section-heading compact-heading">
+          <p class="eyebrow">Anteprima</p>
+          <h2>Guarda NicotinaaTv Extractor in azione.</h2>
+        </div>
+        <div class="video-frame" data-preview-player>
+          <div class="preview-screen">
+            <canvas width="480" height="270" aria-label="Anteprima video NicotinaaTv Extractor" role="img" data-preview-frame></canvas>
+          </div>
+          <div class="player-controls" aria-label="Controlli anteprima">
+            <button type="button" data-preview-toggle>Play</button>
+            <button type="button" data-preview-restart>Indietro</button>
+            <input type="range" min="0" max="40.7" step="0.125" value="0" data-preview-seek aria-label="Tempo video" />
+            <span data-preview-time>0:00 / 0:40</span>
+          </div>
+        </div>
+      </section>
 
-  async function completeEmailRedirectLogin(client) {
-    const url = new URL(window.location.href);
-    const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
-    const code = url.searchParams.get("code");
-    const accessToken = hashParams.get("access_token");
-    const refreshToken = hashParams.get("refresh_token");
-    const hasAuthError = url.searchParams.has("error") || hashParams.has("error");
-    const isAuthRedirect = hasAuthError || code || (accessToken && refreshToken);
+      <section class="security-band section-shell reveal" id="sicurezza">
+        <div>
+          <p class="eyebrow">Sicurezza</p>
+          <h2>Scarica solo da questa pagina ufficiale.</h2>
+          <p>
+            Non fidarti di copie caricate su altri siti, Discord o Telegram. Se
+            l'hash del file scaricato non combacia, elimina il file: potrebbe
+            essere stato modificato.
+          </p>
+          <p>
+            L'app include un controllo anti-manomissione: se l'eseguibile viene
+            alterato, l'avvio mostra un avviso di sicurezza.
+          </p>
+        </div>
+        <div class="hash-list">
+          <div>
+            <span>SHA256 ZIP ufficiale</span>
+            <code>99CC3CA1D145BB1E04090D27C220D94101D44350B9810F71EAF6CADA07D7C76F</code>
+          </div>
+          <div>
+            <span>SHA256 EXE nella ZIP</span>
+            <code>E1B9089567CA4AFA28A1A4B49FD780BAE78CD1DC18A5EE3B7D393AE9ED95F9FC</code>
+          </div>
+        </div>
+      </section>
 
-    if (isAuthRedirect) showAuthBridgeScreen("loading");
+      <section class="feature-wrap section-shell" id="funzioni">
+        <div class="section-heading reveal">
+          <p class="eyebrow">Funzioni principali</p>
+          <h2>Resource FiveM pronta, pulita e ordinata.</h2>
+        </div>
+        <div class="feature-grid">
+          <article class="feature reveal">Estrazione DLC.RPF per veicoli FiveM.</article>
+          <article class="feature reveal">Drag and drop di uno o piu file RPF.</article>
+          <article class="feature reveal">Conversione in coda di piu auto.</article>
+          <article class="feature reveal">Creazione automatica cartelle stream e data.</article>
+          <article class="feature reveal">Generazione automatica fxmanifest.lua firmato NicotinaaTv Extractor V1.0.</article>
+          <article class="feature reveal">Supporto veicoli add-on.</article>
+          <article class="feature reveal">Supporto veicoli replace con solo stream.</article>
+          <article class="feature reveal">Pulizia data: solo file .meta.</article>
+          <article class="feature reveal">Pulizia stream: solo file .yft e .ytd.</article>
+          <article class="feature reveal">Fix tuning carcols per modelli mancanti.</article>
+          <article class="feature reveal">Fix Luxart/emergency per polizia, sheriff, swat, ems e simili.</article>
+          <article class="feature reveal">Fix vehicles_*_interior quando il nome nel vehicles.meta non combacia con lo .ytd reale.</article>
+        </div>
+      </section>
 
-    if (hasAuthError) {
-      cleanAuthUrl();
-      showAuthBridgeScreen("error");
-      return;
-    }
+      <section class="discord-support section-shell reveal" id="assistenza">
+        <div>
+          <p class="eyebrow">Assistenza ufficiale</p>
+          <h2>Hai bisogno di aiuto?</h2>
+          <p>
+            Entra nel Discord ufficiale per supporto, aggiornamenti, problemi con
+            il download e richieste su NicotinaaTv Extractor.
+          </p>
+        </div>
+        <a class="discord-button" href="https://discord.gg/cBfpqR6vkj" target="_blank" rel="noopener noreferrer">
+          Vai al Discord
+        </a>
+      </section>
 
-    if (code) {
-      await client.auth.exchangeCodeForSession(code);
-      cleanAuthUrl();
-      notifyAuthSync("email-confirmed");
-      showAuthBridgeScreen("done");
-      closeAuthBridgeTab();
-      return;
-    }
+      <section class="account-shell section-shell" id="commenti">
+        <div class="section-heading reveal">
+          <p class="eyebrow">Community</p>
+          <h2>Commenti e aggiornamenti.</h2>
+          <p>
+            Accedi con Discord per commentare e scaricare il file ufficiale.
+            Sul sito pubblico si vede solo il nickname.
+          </p>
+        </div>
 
-    if (accessToken && refreshToken) {
-      await client.auth.setSession({
-        access_token: accessToken,
-        refresh_token: refreshToken,
-      });
-      cleanAuthUrl();
-      notifyAuthSync("email-confirmed");
-      showAuthBridgeScreen("done");
-      closeAuthBridgeTab();
-    }
-  }
+        <div class="auth-layout discord-auth-layout" data-auth-panel>
+          <div class="auth-panel auth-discord reveal">
+            <div>
+              <p class="eyebrow">Accesso rapido</p>
+              <h3>Entra con Discord</h3>
+              <p>
+                Un click, niente email da confermare. Il tuo nome Discord viene
+                usato per creare il profilo e il CEO puo controllare gli accessi
+                in caso di abuso.
+              </p>
+            </div>
+            <button class="discord-login-button" type="button" data-discord-login>
+              Accedi con Discord
+            </button>
+            <small class="auth-note">
+              Dopo il login puoi scaricare la ZIP ufficiale e scrivere commenti.
+            </small>
+          </div>
+        </div>
 
-  if (window.supabase?.createClient) {
-    const originalCreateClient = window.supabase.createClient.bind(window.supabase);
-    window.supabase.createClient = function createClientWithOfficialRedirect(...args) {
-      const client = originalCreateClient(...args);
-      if (client?.auth?.signUp) {
-        const originalSignUp = client.auth.signUp.bind(client.auth);
-        client.auth.signUp = function signUpWithOfficialRedirect(credentials) {
-          const patchedCredentials = {
-            ...credentials,
-            options: {
-              ...(credentials?.options || {}),
-              emailRedirectTo: OFFICIAL_SITE_URL,
-            },
-          };
-          return originalSignUp(patchedCredentials);
-        };
-      }
-      window.NICOTINAATV_AUTH_READY = completeEmailRedirectLogin(client);
-      return client;
-    };
-  }
+        <div class="session-bar" hidden data-session-bar>
+          <span data-session-text></span>
+          <form class="nickname-form" data-nickname-form>
+            <input name="nickname" maxlength="24" placeholder="Nuovo nickname" aria-label="Nuovo nickname" />
+            <button type="submit">Cambia nickname</button>
+          </form>
+        </div>
 
-  function cleanStatusLine() {
-    const status = document.querySelector("[data-status]");
-    if (!status) return;
-    const text = status.textContent.trim();
-    if (!text || text.toLowerCase().includes("supabase")) {
-      status.textContent = "";
-      status.hidden = true;
-      return;
-    }
-    status.hidden = false;
-  }
+        <form class="comment-form reveal" data-comment-form hidden>
+          <label>
+            Scrivi un commento
+            <textarea name="body" maxlength="600" required></textarea>
+          </label>
+          <button type="submit">Invia commento</button>
+        </form>
 
-  window.addEventListener("DOMContentLoaded", () => {
-    const registerButton = document.querySelector('[data-auth-form="register"] button[type="submit"]');
-    if (registerButton) registerButton.textContent = "Crea account";
+        <p class="status-line" data-status role="status" aria-live="polite"></p>
 
-    const status = document.querySelector("[data-status]");
-    if (status) {
-      cleanStatusLine();
-      new MutationObserver(cleanStatusLine).observe(status, {
-        childList: true,
-        characterData: true,
-        subtree: true,
-      });
-    }
-  });
-})();
+        <div class="moderation-panel reveal" data-boss-panel hidden>
+          <div class="section-heading compact-heading">
+            <p class="eyebrow">CEO Panel</p>
+            <h2>Commenti in attesa</h2>
+          </div>
+          <div class="ceo-access" data-ceo-login-panel hidden>
+            <h3>Accesso protetto CEO</h3>
+            <form data-ceo-login-form>
+              <label>
+                Password CEO
+                <input name="password" type="password" autocomplete="current-password" required />
+              </label>
+              <button type="submit">Sblocca pannello</button>
+            </form>
+          </div>
+          <div class="ceo-tools" data-ceo-tools hidden>
+            <div class="ceo-tools-head">
+              <div>
+                <h3>Utenti registrati</h3>
+                <p>Visibile solo al CEO tramite backend protetto.</p>
+              </div>
+              <button type="button" data-ceo-refresh-users>Aggiorna utenti</button>
+            </div>
+            <div class="ceo-user-list" data-ceo-users></div>
+          </div>
+          <div class="comment-list" data-pending-comments></div>
+        </div>
+
+        <div class="public-comments reveal">
+          <div class="section-heading compact-heading">
+            <p class="eyebrow">Pubblici</p>
+            <h2>Commenti approvati</h2>
+          </div>
+          <div class="comment-list" data-public-comments></div>
+        </div>
+      </section>
+
+      <section class="social-strip section-shell reveal" id="social">
+        <a href="https://www.tiktok.com/@nicotinaa_tv" target="_blank" rel="noopener noreferrer">TikTok</a>
+        <a href="https://discord.gg/cBfpqR6vkj" target="_blank" rel="noopener noreferrer">Discord</a>
+        <a href="https://www.instagram.com/nicotinaatv/" target="_blank" rel="noopener noreferrer">Instagram</a>
+        <a href="https://www.youtube.com/@Nicotinaatv" target="_blank" rel="noopener noreferrer">YouTube</a>
+      </section>
+    </main>
+
+    <aside class="visit-counter" aria-live="polite">
+      <span class="eye-shape" aria-hidden="true"></span>
+      <span>Totali <strong data-total-visits>0</strong></span>
+      <span>Oggi <strong data-daily-visits>0</strong></span>
+    </aside>
+
+    <footer class="section-shell">
+      <span>NicotinaaTv Extractor V1.0</span>
+      <span>Official download page</span>
+    </footer>
+  </body>
+</html>
