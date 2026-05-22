@@ -19,6 +19,7 @@ const supabaseClient =
 let remoteUser = null;
 let lastAuthSyncAt = 0;
 let authSyncChannel = null;
+let authSyncInProgress = false;
 const authTabId = (() => {
   try {
     const saved = sessionStorage.getItem(AUTH_TAB_KEY);
@@ -317,6 +318,36 @@ function parseAuthSyncPayload(value) {
   }
 }
 
+function isSupabaseAuthStorageKey(key) {
+  const cleanKey = String(key || "");
+  return cleanKey.startsWith("sb-") && cleanKey.includes("auth-token");
+}
+
+async function syncRemoteSessionFromAnotherTab(reason = "auth-sync") {
+  if (authSyncInProgress || !isRemoteMode()) return;
+  authSyncInProgress = true;
+  const previousId = remoteUser?.id || "";
+  const previousConfirmed = Boolean(remoteUser?.emailConfirmed);
+  try {
+    await loadRemoteSession();
+    await recordRemoteProfileSeen();
+    await refreshRemoteData();
+    const hasNewLogin = remoteUser?.id && remoteUser.id !== previousId;
+    const justConfirmed = remoteUser?.emailConfirmed && !previousConfirmed;
+    if (hasNewLogin || justConfirmed || reason === "email-confirmed") {
+      window.location.hash = "commenti";
+      setStatus("Account confermato: ricarico la pagina gia aperta...", "success");
+      window.setTimeout(() => window.location.reload(), 450);
+    }
+  } catch {
+    window.location.reload();
+  } finally {
+    window.setTimeout(() => {
+      authSyncInProgress = false;
+    }, 1200);
+  }
+}
+
 async function applyAuthSync(payload) {
   if (!isRemoteMode()) return;
   const sync = parseAuthSyncPayload(payload);
@@ -325,30 +356,28 @@ async function applyAuthSync(payload) {
   if (syncTime && syncTime <= lastAuthSyncAt) return;
   lastAuthSyncAt = syncTime || Date.now();
 
-  try {
-    setStatus("Email confermata: aggiorno la pagina gia aperta...", "success");
-    await loadRemoteSession();
-    await recordRemoteProfileSeen();
-    await refreshRemoteData();
-    if (remoteUser) {
-      window.location.hash = "commenti";
-      window.setTimeout(() => window.location.reload(), 450);
-    }
-  } catch {
-    window.location.reload();
-  }
+  setStatus("Email confermata: aggiorno la pagina gia aperta...", "success");
+  await syncRemoteSessionFromAnotherTab(sync.reason || "email-confirmed");
 }
 
 function setupAuthSyncListeners() {
   window.addEventListener("storage", (event) => {
     if (event.key === AUTH_SYNC_KEY && event.newValue) {
       applyAuthSync(event.newValue);
+      return;
+    }
+    if (isSupabaseAuthStorageKey(event.key) && event.newValue) {
+      syncRemoteSessionFromAnotherTab("supabase-auth-storage");
     }
   });
   try {
     authSyncChannel = new BroadcastChannel(AUTH_CHANNEL_NAME);
     authSyncChannel.addEventListener("message", (event) => applyAuthSync(event.data));
   } catch {}
+  window.addEventListener("focus", () => syncRemoteSessionFromAnotherTab("focus-check"));
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) syncRemoteSessionFromAnotherTab("visibility-check");
+  });
 }
 
 function escapeHtml(value) {

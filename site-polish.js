@@ -74,6 +74,9 @@
 
   function closeAuthBridgeTab() {
     window.setTimeout(() => {
+      try {
+        window.open("", "_self");
+      } catch {}
       window.close();
       window.setTimeout(() => {
         if (!document.hidden) showAuthBridgeScreen("blocked");
