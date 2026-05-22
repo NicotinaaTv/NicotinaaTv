@@ -4,6 +4,9 @@ const LOCAL_CEO_ENABLED = false;
 const NICKNAME_CHANGE_DAYS = 14;
 const REMOTE_VISITOR_KEY = "nicotinaatv_remote_visitor_key";
 const CEO_TOKEN_KEY = "nicotinaatv_ceo_token";
+const AUTH_SYNC_KEY = "nicotinaatv_auth_sync_v1";
+const AUTH_CHANNEL_NAME = "nicotinaatv-auth";
+const AUTH_TAB_KEY = "nicotinaatv_auth_tab_id";
 const PUBLIC_SITE_URL = "https://nicotinaatv.github.io/NicotinaaTv/";
 const SUPABASE_SETTINGS = window.NICOTINAATV_SUPABASE || {};
 const supabaseClient =
@@ -14,6 +17,19 @@ const supabaseClient =
     ? window.supabase.createClient(SUPABASE_SETTINGS.url, SUPABASE_SETTINGS.publishableKey)
     : null;
 let remoteUser = null;
+let lastAuthSyncAt = 0;
+let authSyncChannel = null;
+const authTabId = (() => {
+  try {
+    const saved = sessionStorage.getItem(AUTH_TAB_KEY);
+    if (saved) return saved;
+    const created = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
+    sessionStorage.setItem(AUTH_TAB_KEY, created);
+    return created;
+  } catch {
+    return `${Date.now()}-${Math.random()}`;
+  }
+})();
 
 const reservedNicknameParts = [
   "admin", "administrator", "amministratore", "mod", "moderator", "moderatore", "owner",
@@ -277,6 +293,64 @@ function setDownloadStatus(message, type = "") {
   els.downloadStatus.className = `download-status status-line ${type}`.trim();
 }
 
+function notifyAuthSync(reason) {
+  const payload = {
+    reason,
+    sourceId: authTabId,
+    at: Date.now(),
+  };
+  try {
+    localStorage.setItem(AUTH_SYNC_KEY, JSON.stringify(payload));
+  } catch {}
+  try {
+    const channel = new BroadcastChannel(AUTH_CHANNEL_NAME);
+    channel.postMessage(payload);
+    channel.close();
+  } catch {}
+}
+
+function parseAuthSyncPayload(value) {
+  try {
+    return typeof value === "string" ? JSON.parse(value) : value;
+  } catch {
+    return null;
+  }
+}
+
+async function applyAuthSync(payload) {
+  if (!isRemoteMode()) return;
+  const sync = parseAuthSyncPayload(payload);
+  if (!sync || sync.sourceId === authTabId) return;
+  const syncTime = Number(sync.at || 0);
+  if (syncTime && syncTime <= lastAuthSyncAt) return;
+  lastAuthSyncAt = syncTime || Date.now();
+
+  try {
+    setStatus("Email confermata: aggiorno la pagina gia aperta...", "success");
+    await loadRemoteSession();
+    await recordRemoteProfileSeen();
+    await refreshRemoteData();
+    if (remoteUser) {
+      window.location.hash = "commenti";
+      window.setTimeout(() => window.location.reload(), 450);
+    }
+  } catch {
+    window.location.reload();
+  }
+}
+
+function setupAuthSyncListeners() {
+  window.addEventListener("storage", (event) => {
+    if (event.key === AUTH_SYNC_KEY && event.newValue) {
+      applyAuthSync(event.newValue);
+    }
+  });
+  try {
+    authSyncChannel = new BroadcastChannel(AUTH_CHANNEL_NAME);
+    authSyncChannel.addEventListener("message", (event) => applyAuthSync(event.data));
+  } catch {}
+}
+
 function escapeHtml(value) {
   return String(value)
     .replaceAll("&", "&amp;")
@@ -458,11 +532,13 @@ function authRedirectUrl() {
 }
 
 function cleanAuthUrl() {
+  const url = new URL(window.location.href);
+  ["code", "error", "error_code", "error_description"].forEach((key) => url.searchParams.delete(key));
   const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
   const authHashKeys = ["access_token", "refresh_token", "expires_in", "token_type", "type", "error", "error_code", "error_description"];
   const hasAuthHash = authHashKeys.some((key) => hashParams.has(key));
-  const keepHash = hasAuthHash ? "" : window.location.hash;
-  window.history.replaceState({}, document.title, `${window.location.origin}${window.location.pathname}${keepHash}`);
+  const keepHash = hasAuthHash ? "#commenti" : window.location.hash || "#commenti";
+  window.history.replaceState({}, document.title, `${url.origin}${url.pathname}${url.search}${keepHash}`);
 }
 
 async function completeEmailRedirectLogin() {
@@ -484,6 +560,7 @@ async function completeEmailRedirectLogin() {
     cleanAuthUrl();
     if (error) throw error;
     setStatus("Email confermata: login effettuato automaticamente.", "success");
+    notifyAuthSync("email-confirmed");
     return;
   }
 
@@ -495,6 +572,7 @@ async function completeEmailRedirectLogin() {
     cleanAuthUrl();
     if (error) throw error;
     setStatus("Email confermata: login effettuato automaticamente.", "success");
+    notifyAuthSync("email-confirmed");
   }
 }
 
@@ -685,6 +763,7 @@ async function handleRemoteAuth(form, mode) {
   await loadRemoteSession();
   await recordRemoteProfileSeen();
   await refreshRemoteData();
+  notifyAuthSync(mode === "register" ? "account-created" : "login");
   setStatus("Login online attivo: il tuo account resta collegato automaticamente.", "success");
 }
 
@@ -756,6 +835,7 @@ ensurePermanentSession();
 applyDeviceMode();
 
 if (isRemoteMode()) {
+  setupAuthSyncListeners();
   render();
   initializeRemote();
 } else {

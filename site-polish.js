@@ -1,12 +1,44 @@
 (function () {
   const OFFICIAL_SITE_URL = "https://nicotinaatv.github.io/NicotinaaTv/";
+  const AUTH_SYNC_KEY = "nicotinaatv_auth_sync_v1";
+  const AUTH_CHANNEL_NAME = "nicotinaatv-auth";
+  const AUTH_TAB_KEY = "nicotinaatv_auth_tab_id";
+  const AUTH_TAB_ID = (() => {
+    try {
+      const saved = sessionStorage.getItem(AUTH_TAB_KEY);
+      if (saved) return saved;
+      const created = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
+      sessionStorage.setItem(AUTH_TAB_KEY, created);
+      return created;
+    } catch {
+      return `${Date.now()}-${Math.random()}`;
+    }
+  })();
+
+  function notifyAuthSync(reason) {
+    const payload = JSON.stringify({
+      reason,
+      sourceId: AUTH_TAB_ID,
+      at: Date.now(),
+    });
+    try {
+      localStorage.setItem(AUTH_SYNC_KEY, payload);
+    } catch {}
+    try {
+      const channel = new BroadcastChannel(AUTH_CHANNEL_NAME);
+      channel.postMessage(JSON.parse(payload));
+      channel.close();
+    } catch {}
+  }
 
   function cleanAuthUrl() {
+    const url = new URL(window.location.href);
+    ["code", "error", "error_code", "error_description"].forEach((key) => url.searchParams.delete(key));
     const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
     const authHashKeys = ["access_token", "refresh_token", "expires_in", "token_type", "type", "error", "error_code", "error_description"];
     const hasAuthHash = authHashKeys.some((key) => hashParams.has(key));
-    const keepHash = hasAuthHash ? "" : window.location.hash;
-    window.history.replaceState({}, document.title, `${window.location.origin}${window.location.pathname}${keepHash}`);
+    const keepHash = hasAuthHash ? "#commenti" : window.location.hash || "#commenti";
+    window.history.replaceState({}, document.title, `${url.origin}${url.pathname}${url.search}${keepHash}`);
   }
 
   async function completeEmailRedirectLogin(client) {
@@ -25,6 +57,7 @@
     if (code) {
       await client.auth.exchangeCodeForSession(code);
       cleanAuthUrl();
+      notifyAuthSync("email-confirmed");
       return;
     }
 
@@ -34,6 +67,7 @@
         refresh_token: refreshToken,
       });
       cleanAuthUrl();
+      notifyAuthSync("email-confirmed");
     }
   }
 
