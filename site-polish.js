@@ -73,6 +73,24 @@
     `;
   }
 
+  function hideAuthBridgeScreen() {
+    const bridge = document.getElementById(AUTH_BRIDGE_ID);
+    if (bridge) bridge.remove();
+  }
+
+  function returnToOfficialSite() {
+    window.setTimeout(() => {
+      hideAuthBridgeScreen();
+      const target = `${OFFICIAL_SITE_URL}#commenti`;
+      if (window.location.href !== target) {
+        window.location.replace(target);
+        return;
+      }
+      notifyAuthSync("discord-login");
+      window.dispatchEvent(new Event("nicotinaatv-auth-returned"));
+    }, 650);
+  }
+
   function closeAuthBridgeTab() {
     window.setTimeout(() => {
       try {
@@ -80,7 +98,10 @@
       } catch {}
       window.close();
       window.setTimeout(() => {
-        if (!document.hidden) showAuthBridgeScreen("blocked");
+        if (!document.hidden) {
+          showAuthBridgeScreen("blocked");
+          returnToOfficialSite();
+        }
       }, 700);
     }, 700);
   }
@@ -121,7 +142,12 @@
     const isAuthRedirect = hasAuthError || code || (accessToken && refreshToken);
     const isDiscordSameTab = sessionStorage.getItem(DISCORD_OAUTH_KEY) === "1";
 
-    if (isAuthRedirect) showAuthBridgeScreen("loading");
+    if (!isAuthRedirect) {
+      hideAuthBridgeScreen();
+      return;
+    }
+
+    showAuthBridgeScreen("loading");
 
     if (hasAuthError) {
       cleanAuthUrl();
@@ -136,7 +162,7 @@
       showAuthBridgeScreen("done");
       if (isDiscordSameTab) {
         sessionStorage.removeItem(DISCORD_OAUTH_KEY);
-        window.setTimeout(() => window.location.replace(`${OFFICIAL_SITE_URL}#commenti`), 450);
+        returnToOfficialSite();
         return;
       }
       closeAuthBridgeTab();
@@ -153,7 +179,7 @@
       showAuthBridgeScreen("done");
       if (isDiscordSameTab) {
         sessionStorage.removeItem(DISCORD_OAUTH_KEY);
-        window.setTimeout(() => window.location.replace(`${OFFICIAL_SITE_URL}#commenti`), 450);
+        returnToOfficialSite();
         return;
       }
       closeAuthBridgeTab();

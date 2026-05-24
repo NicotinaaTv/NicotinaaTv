@@ -365,6 +365,9 @@ async function applyAuthSync(payload) {
 }
 
 function setupAuthSyncListeners() {
+  window.addEventListener("nicotinaatv-auth-returned", () => {
+    syncRemoteSessionFromAnotherTab("auth-returned");
+  });
   window.addEventListener("storage", (event) => {
     if (event.key === AUTH_SYNC_KEY && event.newValue) {
       applyAuthSync(event.newValue);
@@ -502,7 +505,7 @@ function render() {
       ? "Login Discord richiesto"
       : isRemoteMode() && !user.canDownload
         ? "Account non verificato"
-        : "Download privato pronto";
+        : "Download ufficiale pronto";
   }
   if (els.authPanel) els.authPanel.hidden = Boolean(user);
   if (els.registerForm) els.registerForm.hidden = Boolean(lockedUser || user);
@@ -592,22 +595,35 @@ function isDiscordAuthUser(authUser) {
 
 function metadataValue(authUser, keys) {
   const metadata = authUser?.user_metadata || {};
+  const metadataClaims = metadata.custom_claims || {};
   const identities = Array.isArray(authUser?.identities) ? authUser.identities : [];
   const discordIdentity = identities.find((identity) => identity.provider === "discord") || {};
   const identityData = discordIdentity.identity_data || {};
+  const identityClaims = identityData.custom_claims || {};
   for (const key of keys) {
     if (metadata[key]) return metadata[key];
+    if (metadataClaims[key]) return metadataClaims[key];
     if (identityData[key]) return identityData[key];
+    if (identityClaims[key]) return identityClaims[key];
   }
   return "";
 }
 
 function discordUsernameFromAuth(authUser) {
-  return metadataValue(authUser, ["full_name", "name", "user_name", "preferred_username", "nickname"]);
+  return metadataValue(authUser, [
+    "global_name",
+    "username",
+    "display_name",
+    "full_name",
+    "name",
+    "user_name",
+    "preferred_username",
+    "nickname",
+  ]);
 }
 
 function avatarFromAuth(authUser) {
-  return metadataValue(authUser, ["avatar_url", "picture"]);
+  return metadataValue(authUser, ["avatar_url", "picture", "avatar"]);
 }
 
 function accountIsDownloadReady(authUser, profile = {}) {
@@ -793,14 +809,23 @@ async function downloadProtectedFile() {
   const { data } = await supabaseClient.auth.getSession();
   const token = data.session?.access_token;
   if (!token) throw new Error("Sessione scaduta: rifai il login.");
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 20000);
   const response = await fetch(`${base}/download`, {
     headers: { authorization: `Bearer ${token}` },
-  });
+    signal: controller.signal,
+  }).catch((error) => {
+    if (error.name === "AbortError") {
+      throw new Error("Download troppo lento: riprova tra qualche secondo.");
+    }
+    throw error;
+  }).finally(() => window.clearTimeout(timeout));
   if (!response.ok) {
     const errorBody = await response.json().catch(() => ({}));
     throw new Error(errorBody.error || "Download non autorizzato.");
   }
   const blob = await response.blob();
+  if (!blob.size) throw new Error("File ufficiale vuoto o non disponibile.");
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
@@ -1228,7 +1253,7 @@ els.downloadLink.addEventListener("click", async (event) => {
   }
   if (isRemoteMode()) {
     try {
-      setDownloadStatus("Preparo il download privato...", "");
+      setDownloadStatus("Preparo il download ufficiale...", "");
       await downloadProtectedFile();
       await loadRemoteStats();
       render();
