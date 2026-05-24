@@ -9,6 +9,11 @@ const AUTH_CHANNEL_NAME = "nicotinaatv-auth";
 const AUTH_TAB_KEY = "nicotinaatv_auth_tab_id";
 const DISCORD_OAUTH_KEY = "nicotinaatv_discord_oauth";
 const PUBLIC_SITE_URL = "https://nicotinaatv.github.io/NicotinaaTv/";
+const OFFICIAL_CEO_NAMES = new Map([
+  ["823929378371141652", "NicotinaaTv"],
+  ["1003806561254260887", "balak"],
+  ["1180609520070824088", "ale_nox2"],
+]);
 const SUPABASE_SETTINGS = window.NICOTINAATV_SUPABASE || {};
 const supabaseClient =
   window.supabase &&
@@ -21,6 +26,8 @@ let remoteUser = null;
 let lastAuthSyncAt = 0;
 let authSyncChannel = null;
 let authSyncInProgress = false;
+let ceoUsersLoaded = false;
+let ceoUsersLoadInFlight = null;
 const authTabId = (() => {
   try {
     const saved = sessionStorage.getItem(AUTH_TAB_KEY);
@@ -255,6 +262,14 @@ function currentUser() {
   return state.users.find((user) => user.nickname === state.sessionNickname) || null;
 }
 
+function officialCeoNickname(discordId) {
+  return OFFICIAL_CEO_NAMES.get(String(discordId || "").trim()) || "";
+}
+
+function isGeneratedNickname(nickname) {
+  return /^utente-[0-9a-f-]{6}/i.test(String(nickname || ""));
+}
+
 function ceoApiBase() {
   return String(SUPABASE_SETTINGS.ceoApiUrl || "").replace(/\/+$/, "");
 }
@@ -411,14 +426,14 @@ function commentMarkup(comment, mode, user) {
   const approveActions =
     mode === "pending"
       ? `<div class="boss-actions">
-          <button type="button" data-approve="${comment.id}">Approva</button>
+          <button type="button" data-approve="${comment.id}">Pubblica commento</button>
           <button type="button" data-reject="${comment.id}">Rifiuta</button>
         </div>`
       : "";
   const deleteAction =
     user?.role === "boss"
       ? `<div class="boss-actions">
-          <button class="danger-action" type="button" data-delete="${comment.id}">Elimina per sempre</button>
+          <button class="danger-action" type="button" data-delete="${comment.id}">Elimina definitivamente</button>
         </div>`
       : "";
   const replyBox =
@@ -449,14 +464,18 @@ function formatMaybeDate(value) {
 function renderCeoUsers(users = []) {
   if (!els.ceoUsers) return;
   els.ceoUsers.innerHTML = users.length
-    ? users.map((item) => {
+    ? `<p class="status-line success">Utenti caricati: ${users.length}</p>` + users.map((item) => {
       const provider = String(item.provider || item.providers?.[0] || "email").toLowerCase();
+      const providers = Array.isArray(item.providers) && item.providers.length
+        ? item.providers.map((entry) => String(entry).toUpperCase()).join(", ")
+        : provider.toUpperCase();
       const avatar = item.discordAvatarUrl || "assets/default-avatar.svg";
+      const displayName = officialCeoNickname(item.discordId) || item.discordUsername || item.nickname || "Senza nickname";
       return `<article class="ceo-user-card">
         <div class="ceo-user-head">
           <img class="ceo-user-avatar" src="${escapeHtml(avatar)}" alt="" />
           <div>
-            <strong>${escapeHtml(item.nickname || "Senza nickname")}</strong>
+            <strong>${escapeHtml(displayName)}</strong>
             <span>${escapeHtml(item.email || item.discordEmail || "Email non trovata")}</span>
             <span class="ceo-provider-tag">${escapeHtml(provider.toUpperCase())}</span>
           </div>
@@ -467,7 +486,10 @@ function renderCeoUsers(users = []) {
           <dt>Discord nome</dt><dd>${escapeHtml(item.discordUsername || "Non collegato")}</dd>
           <dt>Discord ID</dt><dd>${escapeHtml(item.discordId || "Non trovato")}</dd>
           <dt>Email Discord</dt><dd>${escapeHtml(item.discordEmail || item.email || "Non trovata")}</dd>
+          <dt>Provider collegati</dt><dd>${escapeHtml(providers)}</dd>
+          <dt>Registrato il</dt><dd>${escapeHtml(formatMaybeDate(item.createdAt))}</dd>
           <dt>Ultimo login</dt><dd>${escapeHtml(formatMaybeDate(item.lastSignInAt))}</dd>
+          <dt>Ultimo cambio nickname</dt><dd>${escapeHtml(formatMaybeDate(item.nicknameChangedAt))}</dd>
           <dt>IP registrazione</dt><dd>${escapeHtml(item.signupIp || "Non ancora visto")}</dd>
           <dt>Ultimo IP</dt><dd>${escapeHtml(item.lastIp || "Non ancora visto")}</dd>
           <dt>Ultima visita</dt><dd>${escapeHtml(formatMaybeDate(item.lastSeenAt))}</dd>
@@ -481,7 +503,7 @@ function render() {
   const user = currentUser();
   const lockedUser = permanentUser();
   const canModerate = user?.role === "boss" && (!isRemoteMode() || Boolean(SUPABASE_SETTINGS.ceoApiUrl));
-  const ceoUnlocked = canModerate && Boolean(getCeoToken());
+  const ceoUnlocked = canModerate && (isRemoteMode() || Boolean(getCeoToken()));
   const publicComments = state.comments
     .filter((comment) => comment.status === "approved")
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
@@ -495,10 +517,11 @@ function render() {
   els.sessionBar.hidden = !user;
   els.commentForm.hidden = !user;
   els.bossPanel.hidden = !canModerate;
-  if (els.ceoLoginPanel) els.ceoLoginPanel.hidden = !canModerate || ceoUnlocked;
+  if (els.ceoLoginPanel) els.ceoLoginPanel.hidden = true;
   if (els.ceoTools) els.ceoTools.hidden = !ceoUnlocked;
   els.profileChip.hidden = !user;
-  els.profileName.textContent = user?.nickname || "";
+  const visibleName = user ? (user.discordUsername || user.nickname) : "";
+  els.profileName.textContent = visibleName;
   if (els.profileAvatar) els.profileAvatar.src = user?.avatarUrl || "assets/default-avatar.svg";
   if (els.downloadHint) {
     els.downloadHint.textContent = !user
@@ -512,7 +535,7 @@ function render() {
   if (els.loginForm) els.loginForm.hidden = Boolean(user);
   els.nicknameForm.hidden = !user || user.role === "boss";
   els.sessionText.textContent = user
-    ? `${isRemoteMode() ? `Account ${user.provider === "discord" ? "Discord" : "online"}` : "Account permanente"}: ${user.nickname}${user.role === "boss" ? " - CEO" : ""}`
+    ? `${isRemoteMode() ? `Account ${user.provider === "discord" ? "Discord" : "online"}` : "Account permanente"}: ${visibleName}${user.role === "boss" ? " - CEO" : ""}`
     : lockedUser
       ? `Account gia creato su questo browser: ${lockedUser.nickname}`
       : "";
@@ -525,6 +548,13 @@ function render() {
     els.pendingComments.innerHTML = pendingComments.length
       ? pendingComments.map((comment) => commentMarkup(comment, "pending", user)).join("")
       : `<p class="status-line success">Nessun commento in attesa.</p>`;
+    if (isRemoteMode() && !ceoUsersLoaded && !ceoUsersLoadInFlight) {
+      loadCeoUsers({ announce: false }).catch((error) => {
+        setStatus(error.message || "Impossibile caricare l'area CEO.", "error");
+      });
+    }
+  } else {
+    ceoUsersLoaded = false;
   }
 }
 
@@ -728,19 +758,27 @@ async function loadRemoteSession() {
 
   const providers = authProviders(authUser);
   const provider = String(profile.provider || providers[0] || "email").toLowerCase();
+  const discordId = profile.discord_id || metadataValue(authUser, ["provider_id", "sub"]);
+  const discordUsername = officialCeoNickname(discordId) || profile.discord_username || discordUsernameFromAuth(authUser);
+  const nickname =
+    officialCeoNickname(discordId) ||
+    (isGeneratedNickname(profile.nickname) && discordUsername ? discordUsername : "") ||
+    profile.nickname ||
+    discordUsername ||
+    "Utente";
   remoteUser = {
     id: profile.id,
     email: authUser.email,
     emailConfirmed: Boolean(authUser.email_confirmed_at || authUser.confirmed_at),
     canDownload: accountIsDownloadReady(authUser, profile),
-    nickname: profile.nickname,
+    nickname,
     nicknameKey: profile.nickname_key,
-    role: profile.role === "ceo" ? "boss" : "member",
+    role: profile.role === "ceo" || officialCeoNickname(discordId) ? "boss" : "member",
     nicknameChangedAt: profile.nickname_changed_at,
     provider,
     providers,
-    discordId: profile.discord_id || metadataValue(authUser, ["provider_id", "sub"]),
-    discordUsername: profile.discord_username || discordUsernameFromAuth(authUser),
+    discordId,
+    discordUsername: discordUsername || nickname,
     avatarUrl: profile.discord_avatar_url || avatarFromAuth(authUser) || "assets/default-avatar.svg",
   };
   state.sessionNickname = remoteUser.nickname;
@@ -786,8 +824,20 @@ async function loadRemoteComments() {
   state.comments = (data || []).map(mapRemoteComment);
 }
 
+async function loadCeoPendingComments() {
+  const user = currentUser();
+  if (user?.role !== "boss" || !ceoApiBase()) return;
+  const data = await ceoFetch("/ceo/comments?status=pending");
+  const pending = (data.comments || []).map(mapRemoteComment);
+  state.comments = [
+    ...state.comments.filter((comment) => comment.status !== "pending"),
+    ...pending,
+  ];
+}
+
 async function refreshRemoteData() {
   await Promise.all([loadRemoteStats(), loadRemoteComments()]);
+  await loadCeoPendingComments();
   render();
 }
 
@@ -805,35 +855,43 @@ function filenameFromDisposition(disposition) {
 
 async function downloadProtectedFile() {
   const base = ceoApiBase();
-  if (!base) throw new Error("Download protetto non configurato.");
+  if (!base) throw new Error("Download ufficiale non configurato.");
   const { data } = await supabaseClient.auth.getSession();
   const token = data.session?.access_token;
   if (!token) throw new Error("Sessione scaduta: rifai il login.");
   const controller = new AbortController();
   const timeout = window.setTimeout(() => controller.abort(), 20000);
-  const response = await fetch(`${base}/download`, {
-    headers: { authorization: `Bearer ${token}` },
-    signal: controller.signal,
-  }).catch((error) => {
+  let response;
+  try {
+    response = await fetch(`${base}/download`, {
+      headers: { authorization: `Bearer ${token}` },
+      signal: controller.signal,
+    });
+  } catch (error) {
     if (error.name === "AbortError") {
       throw new Error("Download troppo lento: riprova tra qualche secondo.");
     }
     throw error;
-  }).finally(() => window.clearTimeout(timeout));
+  } finally {
+    window.clearTimeout(timeout);
+  }
   if (!response.ok) {
     const errorBody = await response.json().catch(() => ({}));
     throw new Error(errorBody.error || "Download non autorizzato.");
   }
   const blob = await response.blob();
   if (!blob.size) throw new Error("File ufficiale vuoto o non disponibile.");
+  const filename = filenameFromDisposition(response.headers.get("content-disposition"));
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = filenameFromDisposition(response.headers.get("content-disposition"));
+  link.download = filename;
+  link.rel = "noopener";
   document.body.appendChild(link);
   link.click();
   link.remove();
-  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  window.setTimeout(() => URL.revokeObjectURL(url), 10000);
+  return filename;
 }
 
 async function ceoFetch(path, options = {}) {
@@ -841,7 +899,7 @@ async function ceoFetch(path, options = {}) {
   if (!base) throw new Error("Backend CEO non configurato.");
   const { data: sessionData } = await supabaseClient.auth.getSession();
   const userToken = sessionData.session?.access_token;
-  if (!userToken) throw new Error("Accedi con Discord CEO prima di usare il pannello.");
+  if (!userToken) throw new Error("Accedi con Discord con un account CEO autorizzato.");
   const response = await fetch(`${base}${path}`, {
     ...options,
     headers: {
@@ -859,11 +917,36 @@ async function ceoFetch(path, options = {}) {
   return data;
 }
 
-async function loadCeoUsers() {
-  if (!els.ceoUsers || !getCeoToken()) return;
-  els.ceoUsers.innerHTML = `<p class="status-line">Carico utenti registrati...</p>`;
-  const data = await ceoFetch("/ceo/users");
-  renderCeoUsers(data.users || []);
+async function loadCeoUsers({ announce = false } = {}) {
+  const user = currentUser();
+  if (!els.ceoUsers || user?.role !== "boss") return;
+  if (ceoUsersLoadInFlight) return ceoUsersLoadInFlight;
+  const button = els.ceoRefreshUsers;
+  const previousLabel = button?.textContent || "Ricarica lista";
+  if (button) {
+    button.disabled = true;
+    button.textContent = "Carico lista...";
+  }
+  els.ceoUsers.innerHTML = `<p class="status-line">Carico lista utenti...</p>`;
+  ceoUsersLoadInFlight = (async () => {
+    try {
+      const data = await ceoFetch("/ceo/users");
+      renderCeoUsers(data.users || []);
+      ceoUsersLoaded = true;
+      if (announce) setStatus("Lista utenti caricata.", "success");
+    } catch (error) {
+      ceoUsersLoaded = false;
+      renderCeoUsers([]);
+      throw error;
+    } finally {
+      if (button) {
+        button.disabled = false;
+        button.textContent = previousLabel === "Carico lista..." ? "Ricarica lista" : previousLabel;
+      }
+      ceoUsersLoadInFlight = null;
+    }
+  })();
+  return ceoUsersLoadInFlight;
 }
 
 async function handleDiscordLogin() {
@@ -962,6 +1045,20 @@ async function updateRemoteNickname(nickname) {
 async function submitRemoteComment(body) {
   const user = currentUser();
   if (!user) return setStatus("Devi effettuare il login.", "error");
+  if (user.role === "boss" && ceoApiBase()) {
+    try {
+      await ceoFetch("/ceo/comments", {
+        method: "POST",
+        body: JSON.stringify({ body }),
+      });
+      await refreshRemoteData();
+      els.commentForm.reset();
+      setStatus("Commento CEO pubblicato subito.", "success");
+    } catch (error) {
+      setStatus(error.message || "Commento CEO non pubblicato.", "error");
+    }
+    return;
+  }
   const { error } = await supabaseClient.from("comments").insert({
     user_id: user.id,
     body,
@@ -1139,7 +1236,7 @@ els.ceoLoginForm?.addEventListener("submit", async (event) => {
     if (!base) return setStatus("Backend CEO non ancora collegato.", "error");
     const { data: sessionData } = await supabaseClient.auth.getSession();
     const userToken = sessionData.session?.access_token;
-    if (!userToken) return setStatus("Accedi con Discord CEO prima di sbloccare il pannello.", "error");
+    if (!userToken) return setStatus("Accedi con Discord con un account CEO autorizzato.", "error");
     const response = await fetch(`${base}/ceo/login`, {
       method: "POST",
       headers: {
@@ -1153,7 +1250,7 @@ els.ceoLoginForm?.addEventListener("submit", async (event) => {
     setCeoToken(data.token);
     els.ceoLoginForm.reset();
     render();
-    await loadCeoUsers();
+    await loadCeoUsers({ announce: true });
     setStatus("Pannello CEO sbloccato.", "success");
   } catch (error) {
     setStatus(error.message || "Accesso CEO non riuscito.", "error");
@@ -1162,8 +1259,7 @@ els.ceoLoginForm?.addEventListener("submit", async (event) => {
 
 els.ceoRefreshUsers?.addEventListener("click", async () => {
   try {
-    await loadCeoUsers();
-    setStatus("Lista utenti aggiornata.", "success");
+    await loadCeoUsers({ announce: true });
   } catch (error) {
     setStatus(error.message || "Impossibile caricare gli utenti.", "error");
   }
@@ -1182,7 +1278,7 @@ document.addEventListener("click", async (event) => {
     try {
       await ceoFetch(`/ceo/comments/${approveId || rejectId || deleteId}/${action}`, { method: "POST" });
       await refreshRemoteData();
-      await loadCeoUsers();
+      await loadCeoUsers({ announce: false });
       setStatus(
         deleteId ? "Commento eliminato definitivamente." : approveId ? "Commento approvato." : "Commento rifiutato.",
         "success"
@@ -1254,14 +1350,19 @@ els.downloadLink.addEventListener("click", async (event) => {
   if (isRemoteMode()) {
     try {
       setDownloadStatus("Preparo il download ufficiale...", "");
-      await downloadProtectedFile();
+      els.downloadLink.classList.add("is-loading");
+      els.downloadLink.setAttribute("aria-busy", "true");
+      const filename = await downloadProtectedFile();
       await loadRemoteStats();
       render();
-      setDownloadStatus("Download avviato.", "success");
+      setDownloadStatus(`Download avviato: ${filename}`, "success");
       setStatus("Download avviato.", "success");
     } catch (error) {
       setDownloadStatus(error.message || "Download non riuscito.", "error");
       setStatus(error.message || "Download non riuscito.", "error");
+    } finally {
+      els.downloadLink.classList.remove("is-loading");
+      els.downloadLink.removeAttribute("aria-busy");
     }
     return;
   }

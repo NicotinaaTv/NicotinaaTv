@@ -51,6 +51,11 @@ button {
   cursor: pointer;
 }
 
+button:disabled {
+  cursor: progress;
+  opacity: 0.7;
+}
+
 #fx {
   position: fixed;
   inset: 0;
@@ -379,6 +384,15 @@ form button,
 .download-button small {
   color: rgba(23, 0, 28, 0.74);
   font-size: 0.72rem;
+}
+
+.download-button.is-loading {
+  pointer-events: none;
+  opacity: 0.78;
+}
+
+.download-button.is-loading strong::after {
+  content: " ...";
 }
 
 .outline-button,
@@ -739,6 +753,12 @@ form {
   color: var(--muted);
 }
 
+.pending-head {
+  margin: 1.35rem 0 0.8rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(255, 122, 202, 0.18);
+}
+
 .ceo-user-list {
   display: grid;
   gap: 0.75rem;
@@ -881,9 +901,14 @@ form {
   margin-top: 0.9rem;
 }
 
+.boss-actions button {
+  flex: 1 1 11rem;
+}
+
 .boss-actions .danger-action {
   border-color: rgba(255, 122, 157, 0.55);
   color: #ffd5df;
+  background: rgba(255, 73, 124, 0.12);
 }
 
 .reply-box {

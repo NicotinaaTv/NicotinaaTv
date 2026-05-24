@@ -212,28 +212,27 @@
 
         <div class="moderation-panel reveal" data-boss-panel hidden>
           <div class="section-heading compact-heading">
-            <p class="eyebrow">CEO Panel</p>
-            <h2>Commenti in attesa</h2>
-          </div>
-          <div class="ceo-access" data-ceo-login-panel hidden>
-            <h3>Accesso protetto CEO</h3>
-            <form data-ceo-login-form>
-              <label>
-                Password CEO
-                <input name="password" type="password" autocomplete="current-password" required />
-              </label>
-              <button type="submit">Sblocca pannello</button>
-            </form>
+            <p class="eyebrow">Area CEO</p>
+            <h2>Gestione sito</h2>
+            <p>
+              Da qui puoi approvare, rifiutare, rispondere o eliminare definitivamente i commenti.
+            </p>
           </div>
           <div class="ceo-tools" data-ceo-tools hidden>
             <div class="ceo-tools-head">
               <div>
-                <h3>Utenti registrati</h3>
-                <p>Visibile solo al CEO tramite backend protetto.</p>
+                <h3>Utenti e sicurezza</h3>
+                <p>Lista privata con nickname, Discord ID, email, IP registrazione e ultimo accesso.</p>
               </div>
-              <button type="button" data-ceo-refresh-users>Aggiorna utenti</button>
+              <button type="button" data-ceo-refresh-users>Ricarica lista</button>
             </div>
             <div class="ceo-user-list" data-ceo-users></div>
+          </div>
+          <div class="ceo-tools-head pending-head">
+            <div>
+              <h3>Commenti da moderare</h3>
+              <p>Pubblica solo i messaggi approvati. I rifiutati non appaiono sul sito.</p>
+            </div>
           </div>
           <div class="comment-list" data-pending-comments></div>
         </div>
