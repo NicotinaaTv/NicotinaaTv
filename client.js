@@ -814,11 +814,15 @@ async function downloadProtectedFile() {
 async function ceoFetch(path, options = {}) {
   const base = ceoApiBase();
   if (!base) throw new Error("Backend CEO non configurato.");
+  const { data: sessionData } = await supabaseClient.auth.getSession();
+  const userToken = sessionData.session?.access_token;
+  if (!userToken) throw new Error("Accedi con Discord CEO prima di usare il pannello.");
   const response = await fetch(`${base}${path}`, {
     ...options,
     headers: {
       "content-type": "application/json",
       "x-ceo-token": getCeoToken(),
+      authorization: `Bearer ${userToken}`,
       ...(options.headers || {}),
     },
   });
@@ -1108,9 +1112,15 @@ els.ceoLoginForm?.addEventListener("submit", async (event) => {
   try {
     const base = ceoApiBase();
     if (!base) return setStatus("Backend CEO non ancora collegato.", "error");
+    const { data: sessionData } = await supabaseClient.auth.getSession();
+    const userToken = sessionData.session?.access_token;
+    if (!userToken) return setStatus("Accedi con Discord CEO prima di sbloccare il pannello.", "error");
     const response = await fetch(`${base}/ceo/login`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${userToken}`,
+      },
       body: JSON.stringify({ password }),
     });
     const data = await response.json().catch(() => ({}));
