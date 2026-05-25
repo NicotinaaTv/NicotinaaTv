@@ -863,7 +863,7 @@ async function downloadProtectedFile() {
   const timeout = window.setTimeout(() => controller.abort(), 20000);
   let response;
   try {
-    response = await fetch(`${base}/download`, {
+    response = await fetch(`${base}/download-link`, {
       headers: { authorization: `Bearer ${token}` },
       signal: controller.signal,
     });
@@ -879,19 +879,10 @@ async function downloadProtectedFile() {
     const errorBody = await response.json().catch(() => ({}));
     throw new Error(errorBody.error || "Download non autorizzato.");
   }
-  const blob = await response.blob();
-  if (!blob.size) throw new Error("File ufficiale vuoto o non disponibile.");
-  const filename = filenameFromDisposition(response.headers.get("content-disposition"));
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  link.rel = "noopener";
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  window.setTimeout(() => URL.revokeObjectURL(url), 10000);
-  return filename;
+  const dataLink = await response.json().catch(() => ({}));
+  if (!dataLink.url) throw new Error("Link download temporaneo non creato.");
+  window.location.href = dataLink.url;
+  return dataLink.filename || "NicotinaaTv Extractor V1.0.zip";
 }
 
 async function ceoFetch(path, options = {}) {
